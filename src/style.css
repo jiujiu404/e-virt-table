@@ -74,6 +74,25 @@
     overflow-y: auto;
     resize: none;
 }
+.e-virt-table-dropdown-selection {
+    width: 100%;
+    box-sizing: border-box;
+    outline: none;
+    font-weight: 400;
+    padding: 8px;
+    font-size: 12px;
+    color: inherit;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    word-break: break-all;
+    line-height: 1.5;
+    margin: 0;
+    border: none;
+    vertical-align: middle;
+    background: var(--e-virt-table-color-white);
+    overflow-y: auto;
+    resize: none;
+}
 .e-virt-table-context-menu {
     /* display: none; */
     position: absolute;

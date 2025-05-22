@@ -382,9 +382,35 @@ export default class Database {
      * 根据rowKey和key获取单元格数据
      * @param rowKey
      * @param key
+     * @param getAllUniqueValues
      * @returns
      */
-    getItemValue(rowKey: string, key: string) {
+    getItemValue(rowKey: string, key: string, getAllUniqueValues: boolean = false) {
+        if (!getAllUniqueValues) {
+            const row = this.rowKeyMap.get(rowKey);
+            if (row && row.item) {
+                if (row.item[key] === undefined) {
+                    return null;
+                }
+                return row.item[key];
+            }
+            return null;
+        }
+        const uniqueValues = new Set<any>();
+        this.rowKeyMap.forEach((row) => {
+            if (![null, undefined, ''].includes(row?.item?.[key])) {
+                uniqueValues.add(row.item[key]);
+            }
+        });
+        return Array.from(uniqueValues);
+    }
+    /**
+     * 根据rowKey和key获取所有单元格数据
+     * @param rowKey
+     * @param key
+     * @returns
+     */
+    getItemAllValue(rowKey: string, key: string) {
         const row = this.rowKeyMap.get(rowKey);
 
         if (row && row.item) {

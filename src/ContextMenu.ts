@@ -61,7 +61,7 @@ export default class ContextMenu {
         this.contextMenuEl.className = 'e-virt-table-context-menu';
         this.ctx.containerElement.appendChild(this.contextMenuEl);
         // 如果是自定义右键菜单，则不创建默认子菜单
-        if(this.custom) return;
+        if (this.custom) return;
         const { CONTEXT_MENU } = this.ctx.config;
         this.createContextMenuItems(CONTEXT_MENU, (item: MenuItem) => {
             switch (item.value) {
@@ -76,6 +76,9 @@ export default class ContextMenu {
                     break;
                 case 'clearSelected':
                     this.ctx.emit('contextMenuClearSelected');
+                    break;
+                case 'selectedList':
+                    this.ctx.emit('contextMenuSelectedList');
                     break;
                 default:
             }

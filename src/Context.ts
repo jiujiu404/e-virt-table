@@ -78,6 +78,7 @@ export default class Context {
     canvasElement: HTMLCanvasElement;
     overlayerElement: HTMLDivElement;
     editorElement: HTMLDivElement;
+    dropdownElement: HTMLDivElement;
     emptyElement?: HTMLDivElement;
     contextMenuElement?: HTMLDivElement;
     stageWidth = 0;

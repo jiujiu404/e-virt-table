@@ -424,6 +424,7 @@ const eVirtTable = new EVirtTable(canvas, {
             { label: '剪切', value: 'cut' },
             { label: '粘贴', value: 'paste' },
             { label: '清空选中内容', value: 'clearSelected' },
+            { label: '从下拉选项中选择', value: 'selectedList' },
             {
                 label: '新增',
                 value: 'add',
@@ -908,6 +909,7 @@ document.getElementById('setConfig')?.addEventListener('click', () => {
             { label: '剪切', value: 'cut' },
             { label: '粘贴', value: 'paste' },
             { label: '清空选中内容', value: 'clearSelected' },
+            { label: '从下拉选项中选择', value: 'selectedList' },
             {
                 label: '新增',
                 value: 'add',

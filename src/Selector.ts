@@ -1,6 +1,7 @@
 import type Context from './Context';
 import type Cell from './Cell';
 import type CellHeader from './CellHeader';
+import EventTable from './EventTable';
 import { BeforePasteDataMethod, BeforeSetSelectorMethod, ChangeItem, ErrorType, BeforeCopyMethod } from './types';
 import { throttle, decodeSpreadsheetStr, encodeToSpreadsheetStr } from './util';
 export default class Selector {
@@ -163,6 +164,13 @@ export default class Selector {
                 this.clearSelectedData(xArr, yArr);
                 return;
             }
+        });
+        this.ctx.on('contextMenuSelectedList', () => {
+            const rowKey = this.ctx?.focusCell?.rowKey as string;
+            const key = this.ctx?.focusCell?.column.key as string;
+            const colIndex = this.ctx?.focusCell?.colIndex as number;
+            const rowIndex = this.ctx?.focusCell?.rowIndex as number;
+            this.selectCurrentList(this.ctx?.database.getItemValue(rowKey, key, true), rowIndex, colIndex);
         });
         this.ctx.on('contextMenuClearSelected', () => {
             const { xArr, yArr } = this.ctx.selector;
@@ -586,6 +594,13 @@ export default class Selector {
         } else {
             console.error('current browser does not support the Clipboard API');
         }
+    }
+    private selectCurrentList(data: string[], rowIndex: number, colIndex: number) {
+        const { ENABLE_PASTER } = this.ctx.config;
+        if (this.ctx.selector.enable && ENABLE_PASTER) {
+            // const evenTableInstan = new EventTable(this.ctx);
+        }
+        // return { selectList: data, rowIndex, colIndex };
     }
     private clearSelectedData(xArr: number[], yArr: number[], ignoreSet = false) {
         let changeList: ChangeItem[] = [];
