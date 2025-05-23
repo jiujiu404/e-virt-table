@@ -17,6 +17,7 @@ export type containerElementOptions = {
     canvasElement: HTMLCanvasElement;
     overlayerElement: HTMLDivElement;
     editorElement: HTMLDivElement;
+    dropdownElement: HTMLDivElement;
     emptyElement?: HTMLDivElement;
     contextMenuElement?: HTMLDivElement;
 };
@@ -164,7 +165,6 @@ export default class Context {
     database: Database;
     history: History;
     config: Config;
-
     constructor(containerOptions: containerElementOptions, options: EVirtTableOptions) {
         const {
             containerElement,
@@ -172,6 +172,7 @@ export default class Context {
             canvasElement,
             overlayerElement,
             editorElement,
+            dropdownElement,
             emptyElement,
             contextMenuElement,
         } = containerOptions;
@@ -181,6 +182,7 @@ export default class Context {
         this.canvasElement = canvasElement;
         this.overlayerElement = overlayerElement;
         this.editorElement = editorElement;
+        this.dropdownElement = dropdownElement;
         this.emptyElement = emptyElement;
         this.contextMenuElement = contextMenuElement;
         this.config = new Config(options.config || {});
@@ -188,6 +190,7 @@ export default class Context {
         this.eventBrowser = new EventBrowser(this);
         this.eventTable = new EventTable(this);
         this.paint = new Paint(this.canvasElement);
+        // this.dropdown = new DropDown(this);
         this.database = new Database(this, options);
         this.history = new History(this);
         this.icons = new Icons(this);
@@ -208,7 +211,10 @@ export default class Context {
         }
         this.database.setItemValue(rowKey, key, value, history, reDraw, true);
     }
-
+    setDropdownUpdate(options: any[]) {
+        debugger;
+        this.emit('dropdown-update', options); // 复用 Context 的事件系统
+    }
     batchSetItemValueByEditor(_list: ChangeItem[], history = true) {
         // 启用合并单元格关联
         if (this.config.ENABLE_MERGE_CELL_LINK) {

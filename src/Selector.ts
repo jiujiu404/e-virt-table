@@ -1,7 +1,7 @@
 import type Context from './Context';
 import type Cell from './Cell';
 import type CellHeader from './CellHeader';
-import EventTable from './EventTable';
+
 import { BeforePasteDataMethod, BeforeSetSelectorMethod, ChangeItem, ErrorType, BeforeCopyMethod } from './types';
 import { throttle, decodeSpreadsheetStr, encodeToSpreadsheetStr } from './util';
 export default class Selector {
@@ -598,9 +598,10 @@ export default class Selector {
     private selectCurrentList(data: string[], rowIndex: number, colIndex: number) {
         const { ENABLE_PASTER } = this.ctx.config;
         if (this.ctx.selector.enable && ENABLE_PASTER) {
-            // const evenTableInstan = new EventTable(this.ctx);
+            // console.log({ selectList: data, rowIndex, colIndex });
+            this.ctx.setDropdownUpdate(data);
+            // console.log(this);
         }
-        // return { selectList: data, rowIndex, colIndex };
     }
     private clearSelectedData(xArr: number[], yArr: number[], ignoreSet = false) {
         let changeList: ChangeItem[] = [];

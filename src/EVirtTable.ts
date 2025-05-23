@@ -18,6 +18,7 @@ import Selector from './Selector';
 import Autofill from './Autofill';
 import Tooltip from './Tooltip';
 import Editor from './Editor';
+import Dropdown from './Dropdown';
 import Empty from './Empty';
 import Overlayer from './Overlayer';
 import ContextMenu from './ContextMenu';
@@ -33,17 +34,19 @@ export default class EVirtTable {
     private autofill: Autofill;
     private tooltip: Tooltip;
     private editor: Editor;
+    private dropdown: Dropdown;
     private empty: Empty;
     private overlayer: Overlayer;
     private contextMenu: ContextMenu;
     ctx: Context;
     constructor(target: HTMLDivElement, options: EVirtTableOptions) {
         this.options = options;
-        const { overlayerElement, editorElement, emptyElement, contextMenuElement } = options;
+        const { overlayerElement, editorElement, dropdownElement, emptyElement, contextMenuElement } = options;
         const containerElement = this.createContainer(
             target,
             overlayerElement,
             editorElement,
+            dropdownElement,
             emptyElement,
             contextMenuElement,
         );
@@ -57,6 +60,7 @@ export default class EVirtTable {
         this.tooltip = new Tooltip(this.ctx);
         this.empty = new Empty(this.ctx);
         this.editor = new Editor(this.ctx);
+        this.dropdown = new Dropdown(this.ctx);
         this.overlayer = new Overlayer(this.ctx);
         this.contextMenu = new ContextMenu(this.ctx);
         this.ctx.on('draw', () => {
@@ -71,6 +75,7 @@ export default class EVirtTable {
         containerElement: HTMLDivElement,
         _overlayerElement?: HTMLDivElement,
         _editorElement?: HTMLDivElement,
+        _dropdownElement?: HTMLDivElement,
         _emptyElement?: HTMLDivElement,
         _contextMenuElement?: HTMLDivElement,
     ) {
@@ -84,6 +89,9 @@ export default class EVirtTable {
         overlayerElement.className = 'e-virt-table-overlayer';
         const editorElement = _editorElement || document.createElement('div');
         editorElement.className = 'e-virt-table-editor';
+        const dropdownElement = _dropdownElement || document.createElement('div');
+        dropdownElement.id = 'e-virt-table-dropdown';
+        dropdownElement.className = 'e-virt-table-dropdown';
         const emptyElement = _emptyElement;
         const contextMenuElement = _contextMenuElement;
         stageElement.appendChild(canvasElement);
@@ -95,6 +103,7 @@ export default class EVirtTable {
             canvasElement,
             overlayerElement,
             editorElement,
+            dropdownElement,
             emptyElement,
             contextMenuElement,
         };
@@ -376,6 +385,7 @@ export default class EVirtTable {
         this.overlayer.destroy();
         this.empty.destroy();
         this.editor.destroy();
+        this.dropdown.destroy();
         this.tooltip.destroy();
         this.selector.destroy();
         this.autofill.destroy();

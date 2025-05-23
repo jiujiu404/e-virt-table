@@ -1,10 +1,10 @@
 import type Cell from './Cell';
 import type Context from './Context';
-
 export default class DropDown {
     private dropdownEl!: HTMLDivElement;
     private inputEl!: HTMLInputElement;
     private datalistEl!: HTMLDataListElement;
+    private optionEl!: HTMLOptionElement;
     private enable = false;
     private cellTarget: Cell | null = null;
     private selectorArrStr = '';
@@ -16,6 +16,11 @@ export default class DropDown {
         this.ctx = ctx;
         this.initDropDown();
         this.init();
+        this.ctx.on('dropdown-update', (options) => {
+            debugger;
+            // 监听 Context 事件
+            this.setOptions('e-virt-table-dropdown', options);
+        });
     }
     private init() {
         // 容器不聚焦，清除选择器
@@ -220,16 +225,19 @@ export default class DropDown {
     private initDropDown() {
         // 初始化文本编辑器
         this.inputEl = document.createElement('input');
-        this.datalistEl = document.createElement('dataList');
-        this.inputEl.setAttribute('rows', '1');
+        this.datalistEl = document.createElement('dataList') as HTMLDataListElement;
+        this.datalistEl.id = 'e-virt-table-editor-search-textarea';
         // 监听输入事件，自动调整高度
         this.inputEl.addEventListener('input', this.autoSize.bind(this));
         this.inputEl.addEventListener('blur', () => {
             this.doneEdit();
         });
         this.dropdownEl = this.ctx.dropdownElement;
-        this.inputEl.className = 'e-virt-table-dropdown-selection';
+        this.inputEl.className = 'e-virt-table-editor-search-textarea';
+        this.inputEl.setAttribute('list', 'e-virt-table-editor-search-textarea');
+        this.inputEl.setAttribute('autofocus', 'true');
         this.dropdownEl.appendChild(this.inputEl);
+        this.dropdownEl.appendChild(this.datalistEl);
         this.ctx.containerElement.appendChild(this.dropdownEl);
     }
     private autoSize() {
@@ -390,6 +398,15 @@ export default class DropDown {
             this.startEditByInput(this.cellTarget);
             this.ctx.emit('startEdit', this.cellTarget);
         }
+    }
+    setOptions(datalistId: string, data: any[]) {
+        const datalist = document.querySelector(`#${datalistId} > datalist`) as HTMLDataListElement;
+        datalist.innerHTML = ''; // 清空现有选项
+        data.forEach((item) => {
+            const option = document.createElement('option');
+            option.value = item; // 只需要设置 value
+            datalist.appendChild(option);
+        });
     }
     doneEdit() {
         if (!this.enable) {
