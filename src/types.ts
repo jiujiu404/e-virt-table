@@ -10,7 +10,7 @@ export type EVirtTableOptions = {
     config?: ConfigType;
     overlayerElement?: HTMLDivElement;
     editorElement?: HTMLDivElement;
-    dropdownElement?: HTMLDivElement;
+    selectorToolsElement?: HTMLDivElement;
     emptyElement?: HTMLDivElement;
     contextMenuElement?: HTMLDivElement;
 };

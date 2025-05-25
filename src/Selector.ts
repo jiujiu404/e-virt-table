@@ -596,11 +596,11 @@ export default class Selector {
         }
     }
     private selectCurrentList(data: string[], rowIndex: number, colIndex: number) {
+        console.log('selector selectCurrentList');
         const { ENABLE_PASTER } = this.ctx.config;
         if (this.ctx.selector.enable && ENABLE_PASTER) {
             // console.log({ selectList: data, rowIndex, colIndex });
-            this.ctx.setDropdownUpdate(data);
-            // console.log(this);
+            this.ctx.setSelectorToolsUpdate(data);
         }
     }
     private clearSelectedData(xArr: number[], yArr: number[], ignoreSet = false) {

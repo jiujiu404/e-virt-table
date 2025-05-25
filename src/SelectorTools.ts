@@ -4,7 +4,6 @@ export default class DropDown {
     private dropdownEl!: HTMLDivElement;
     private inputEl!: HTMLInputElement;
     private datalistEl!: HTMLDataListElement;
-    private optionEl!: HTMLOptionElement;
     private enable = false;
     private cellTarget: Cell | null = null;
     private selectorArrStr = '';
@@ -16,8 +15,9 @@ export default class DropDown {
         this.ctx = ctx;
         this.initDropDown();
         this.init();
-        this.ctx.on('dropdown-update', (options) => {
-            debugger;
+        console.log('init selectorTools');
+        this.ctx.on('selector-update', (options) => {
+            console.log('selectorTools on selector-update');
             // 监听 Context 事件
             this.setOptions('e-virt-table-dropdown', options);
         });
@@ -232,7 +232,7 @@ export default class DropDown {
         this.inputEl.addEventListener('blur', () => {
             this.doneEdit();
         });
-        this.dropdownEl = this.ctx.dropdownElement;
+        this.dropdownEl = this.ctx.selectorToolsElement;
         this.inputEl.className = 'e-virt-table-editor-search-textarea';
         this.inputEl.setAttribute('list', 'e-virt-table-editor-search-textarea');
         this.inputEl.setAttribute('autofocus', 'true');

@@ -17,7 +17,7 @@ export type containerElementOptions = {
     canvasElement: HTMLCanvasElement;
     overlayerElement: HTMLDivElement;
     editorElement: HTMLDivElement;
-    dropdownElement: HTMLDivElement;
+    selectorToolsElement: HTMLDivElement;
     emptyElement?: HTMLDivElement;
     contextMenuElement?: HTMLDivElement;
 };
@@ -79,7 +79,7 @@ export default class Context {
     canvasElement: HTMLCanvasElement;
     overlayerElement: HTMLDivElement;
     editorElement: HTMLDivElement;
-    dropdownElement: HTMLDivElement;
+    selectorToolsElement: HTMLDivElement;
     emptyElement?: HTMLDivElement;
     contextMenuElement?: HTMLDivElement;
     stageWidth = 0;
@@ -172,7 +172,7 @@ export default class Context {
             canvasElement,
             overlayerElement,
             editorElement,
-            dropdownElement,
+            selectorToolsElement,
             emptyElement,
             contextMenuElement,
         } = containerOptions;
@@ -182,7 +182,7 @@ export default class Context {
         this.canvasElement = canvasElement;
         this.overlayerElement = overlayerElement;
         this.editorElement = editorElement;
-        this.dropdownElement = dropdownElement;
+        this.selectorToolsElement = selectorToolsElement;
         this.emptyElement = emptyElement;
         this.contextMenuElement = contextMenuElement;
         this.config = new Config(options.config || {});
@@ -190,7 +190,6 @@ export default class Context {
         this.eventBrowser = new EventBrowser(this);
         this.eventTable = new EventTable(this);
         this.paint = new Paint(this.canvasElement);
-        // this.dropdown = new DropDown(this);
         this.database = new Database(this, options);
         this.history = new History(this);
         this.icons = new Icons(this);
@@ -211,9 +210,10 @@ export default class Context {
         }
         this.database.setItemValue(rowKey, key, value, history, reDraw, true);
     }
-    setDropdownUpdate(options: any[]) {
-        debugger;
-        this.emit('dropdown-update', options); // 复用 Context 的事件系统
+    setSelectorToolsUpdate(options: any[]) {
+        console.log('in context public "setSelectorToolsUpdate"');
+        this.emit('selector-update', options); // 复用 Context 的事件系统
+        console.log('setSelectorToolsUpdate emit selector-update');
     }
     batchSetItemValueByEditor(_list: ChangeItem[], history = true) {
         // 启用合并单元格关联
