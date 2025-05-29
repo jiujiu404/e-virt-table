@@ -133,6 +133,7 @@ export default class Config {
         { label: '剪切', value: 'cut' },
         { label: '粘贴', value: 'paste' },
         { label: '清空选中内容', value: 'clearSelected' },
+        { label: '从下拉选项中选择', value: 'selectedList' },
     ];
     HEADER_CELL_STYLE_METHOD?: CellHeaderStyleMethod;
     BODY_CELL_STYLE_METHOD?: CellStyleMethod;

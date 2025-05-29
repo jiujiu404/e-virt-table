@@ -67,7 +67,7 @@ export default class Body {
             // 如果有设置高度的情况，空数据时，高度也要保持为设置的高度
             this.height = HEIGHT - header.height - footerHeight - SCROLLER_TRACK_SIZE;
         }
-        
+
         let containerHeight = this.height + header.height + SCROLLER_TRACK_SIZE;
         // 如果有底部,加上底部高度
         containerHeight += footerHeight;
@@ -101,7 +101,7 @@ export default class Body {
         } else {
             this.visibleHeight = _visibleHeight;
         }
-        if(!this.data.length){
+        if (!this.data.length) {
             this.height = this.visibleHeight;
         }
         this.ctx.body.x = this.x;

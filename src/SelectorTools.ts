@@ -1,9 +1,9 @@
 import type Cell from './Cell';
 import type Context from './Context';
-export default class DropDown {
-    private dropdownEl!: HTMLDivElement;
+export default class SelectorTools {
+    private selectortoolsEl!: HTMLDivElement;
     private inputEl!: HTMLInputElement;
-    private datalistEl!: HTMLDataListElement;
+    private ulEl!: HTMLUListElement;
     private enable = false;
     private cellTarget: Cell | null = null;
     private selectorArrStr = '';
@@ -13,13 +13,13 @@ export default class DropDown {
     private cancel = false;
     constructor(ctx: Context) {
         this.ctx = ctx;
-        this.initDropDown();
+        this.initSelectorTools();
         this.init();
         console.log('init selectorTools');
         this.ctx.on('selector-update', (options) => {
             console.log('selectorTools on selector-update');
             // 监听 Context 事件
-            this.setOptions('e-virt-table-dropdown', options);
+            this.setOptions('', options);
         });
     }
     private init() {
@@ -222,23 +222,25 @@ export default class DropDown {
         }
         return true;
     }
-    private initDropDown() {
+    private initSelectorTools() {
         // 初始化文本编辑器
+        const { CSS_PREFIX } = this.ctx.config;
         this.inputEl = document.createElement('input');
-        this.datalistEl = document.createElement('dataList') as HTMLDataListElement;
-        this.datalistEl.id = 'e-virt-table-editor-search-textarea';
+        this.ulEl = document.createElement('ul');
         // 监听输入事件，自动调整高度
+        this.inputEl.className = `${CSS_PREFIX}-editor-search-textarea`;
+        this.inputEl.setAttribute('list', `${CSS_PREFIX}-editor-search-textarea`);
+        this.inputEl.setAttribute('autofocus', 'true');
         this.inputEl.addEventListener('input', this.autoSize.bind(this));
         this.inputEl.addEventListener('blur', () => {
             this.doneEdit();
         });
-        this.dropdownEl = this.ctx.selectorToolsElement;
-        this.inputEl.className = 'e-virt-table-editor-search-textarea';
-        this.inputEl.setAttribute('list', 'e-virt-table-editor-search-textarea');
-        this.inputEl.setAttribute('autofocus', 'true');
-        this.dropdownEl.appendChild(this.inputEl);
-        this.dropdownEl.appendChild(this.datalistEl);
-        this.ctx.containerElement.appendChild(this.dropdownEl);
+        this.selectortoolsEl = this.ctx.selectorToolsElement;
+        this.selectortoolsEl.id = `${CSS_PREFIX}-selector-tools`;
+        this.selectortoolsEl.className = `${CSS_PREFIX}-selector-tools`;
+        this.selectortoolsEl.appendChild(this.inputEl);
+        this.selectortoolsEl.appendChild(this.ulEl);
+        this.ctx.containerElement.appendChild(this.selectortoolsEl);
     }
     private autoSize() {
         this.inputEl.style.height = 'auto'; // 重置高度
@@ -254,14 +256,14 @@ export default class DropDown {
             config: { SCROLLER_TRACK_SIZE },
         } = this.ctx;
         const bottomY = stageHeight - footer.height - SCROLLER_TRACK_SIZE;
-        this.dropdownEl.style.bottom = `auto`;
+        this.selectortoolsEl.style.bottom = `auto`;
         if (this.drawY < header.height) {
-            this.dropdownEl.style.top = `${header.height - 1}px`;
+            this.selectortoolsEl.style.top = `${header.height - 1}px`;
         }
         if (this.drawY + scrollHeight > bottomY) {
-            this.dropdownEl.style.left = `${this.drawX - 1}px`;
-            this.dropdownEl.style.top = `auto`;
-            this.dropdownEl.style.bottom = `${stageHeight - bottomY}px`;
+            this.selectortoolsEl.style.left = `${this.drawX - 1}px`;
+            this.selectortoolsEl.style.top = `auto`;
+            this.selectortoolsEl.style.bottom = `${stageHeight - bottomY}px`;
         }
         this.inputEl.style.height = `${scrollHeight}px`; // 设置为内容的高度
     }
@@ -284,11 +286,11 @@ export default class DropDown {
             height = maxHeight;
         }
         // 显示编辑器
-        this.dropdownEl.style.display = 'inline-block';
-        this.dropdownEl.style.left = `${this.drawX - 1}px`;
-        this.dropdownEl.style.top = `${this.drawY - 1}px`;
-        this.dropdownEl.style.bottom = `auto`;
-        this.dropdownEl.style.maxHeight = `${maxHeight}px`;
+        this.selectortoolsEl.style.display = 'inline-block';
+        this.selectortoolsEl.style.left = `${this.drawX - 1}px`;
+        this.selectortoolsEl.style.top = `${this.drawY - 1}px`;
+        this.selectortoolsEl.style.bottom = `auto`;
+        this.selectortoolsEl.style.maxHeight = `${maxHeight}px`;
         if (editorType === 'text') {
             this.inputEl.style.display = 'block';
             this.inputEl.style.minWidth = `${width - 1}px`;
@@ -400,12 +402,12 @@ export default class DropDown {
         }
     }
     setOptions(datalistId: string, data: any[]) {
-        const datalist = document.querySelector(`#${datalistId} > datalist`) as HTMLDataListElement;
-        datalist.innerHTML = ''; // 清空现有选项
+        const ul = this.ulEl;
+        ul.innerHTML = ''; // 清空现有选项
         data.forEach((item) => {
-            const option = document.createElement('option');
-            option.value = item; // 只需要设置 value
-            datalist.appendChild(option);
+            const li = document.createElement('li');
+            li.innerHTML = item; // 只需要设置 value
+            ul.appendChild(li);
         });
     }
     doneEdit() {
@@ -418,7 +420,7 @@ export default class DropDown {
         this.ctx.editing = false;
         this.ctx.containerElement.focus({ preventScroll: true });
         // 隐藏编辑器
-        this.dropdownEl.style.display = 'none';
+        this.selectortoolsEl.style.display = 'none';
         this.ctx.emit('drawView');
     }
     clearEditor() {
@@ -430,6 +432,6 @@ export default class DropDown {
         this.ctx.emit('drawView');
     }
     destroy() {
-        this.dropdownEl?.remove();
+        this.selectortoolsEl?.remove();
     }
 }

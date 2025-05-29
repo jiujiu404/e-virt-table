@@ -90,8 +90,6 @@ export default class EVirtTable {
         const editorElement = _editorElement || document.createElement('div');
         editorElement.className = 'e-virt-table-editor';
         const selectorToolsElement = _selectorToolsElement || document.createElement('div');
-        selectorToolsElement.id = 'e-virt-table-dropdown';
-        selectorToolsElement.className = 'e-virt-table-dropdown';
         const emptyElement = _emptyElement;
         const contextMenuElement = _contextMenuElement;
         stageElement.appendChild(canvasElement);
