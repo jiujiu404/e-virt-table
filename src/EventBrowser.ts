@@ -1,9 +1,14 @@
 import Context from './Context';
 
-type EventTask = Map<string, EventListenerOrEventListenerObject>;
+type ListenerEntry = {
+    target: EventTarget;
+    name: string;
+    fn: EventListenerOrEventListenerObject;
+    options?: AddEventListenerOptions | boolean;
+};
 
 export default class EventBrowser {
-    private eventTasks: EventTask = new Map();
+    private eventTasks: Set<ListenerEntry> = new Set();
     private ctx: Context;
     constructor(ctx: Context) {
         this.ctx = ctx;
@@ -27,10 +32,26 @@ export default class EventBrowser {
         this.bind(this.ctx.stageElement, 'dblclick', this.handleDblclick.bind(this));
         this.bind(this.ctx.stageElement, 'mouseover', this.handleMouseover.bind(this));
         this.bind(this.ctx.stageElement, 'mouseout', this.handleMouseout.bind(this));
+        this.bind(document, 'selectionchange', this.selectionchange.bind(this));
+    }
+    private selectionchange() {
+        this.ctx.domSelectionStr = '';
+        const selection = window.getSelection();
+        if (selection && selection.toString()) {
+            this.ctx.domSelectionStr = selection.toString();
+        }
+
+    }
+    private clearDomSelection() {
+        const selection = window.getSelection();
+        if (selection && !selection.isCollapsed) {
+            selection.removeAllRanges();
+        }
     }
     destroy() {
-        this.eventTasks.forEach((fn, event) => {
-            this.unbind(window, event, fn);
+        const entries = Array.from(this.eventTasks);
+        entries.forEach(({ target, name, fn, options }) => {
+            this.unbind(target, name, fn, options);
         });
         this.eventTasks.clear();
     }
@@ -39,14 +60,20 @@ export default class EventBrowser {
         this.ctx.emit('resize', e);
     }
     private handleMouseDown(e: Event) {
+        this.clearDomSelection();
         const _e = e as MouseEvent;
         if (_e.button === 0) {
             this.ctx.mousedown = true;
         }
-        this.ctx.containerElement.focus({ preventScroll: true });
         this.ctx.emit('mousedown', e);
     }
     private handleMousemove(e: Event) {
+        const _e = e as MouseEvent;
+        const rect = this.ctx.containerElement.getBoundingClientRect();
+        const x = _e.clientX - rect.left;
+        const y = _e.clientY - rect.top;
+        this.ctx.mouseX = x;
+        this.ctx.mouseY = y;
         this.ctx.emit('mousemove', e);
     }
     private handleMouseUp(e: Event) {
@@ -65,6 +92,10 @@ export default class EventBrowser {
         if (!this.ctx.isTarget(e)) {
             return;
         }
+        // 拖拽表头中不处理
+        if(this.ctx.dragHeaderIng){
+            return;
+        }
         this.ctx.emit('keydown', e);
     }
     private handleWheel(e: Event) {
@@ -80,6 +111,7 @@ export default class EventBrowser {
         this.ctx.emit('touchmove', e);
     }
     private handleContextMenu(e: Event) {
+        e.preventDefault();
         this.ctx.emit('contextMenu', e);
     }
     private handleMouseover(e: Event) {
@@ -108,11 +140,16 @@ export default class EventBrowser {
         options?: AddEventListenerOptions | boolean,
     ): void {
         target.addEventListener(name, fn, options);
-        this.eventTasks.set(name, fn);
+        this.eventTasks.add({ target, name, fn, options });
     }
 
-    private unbind(target: EventTarget, name: string, fn: EventListenerOrEventListenerObject): void {
-        target.removeEventListener(name, fn);
-        this.eventTasks.delete(name);
+    private unbind(target: EventTarget, name: string, fn: EventListenerOrEventListenerObject, options?: AddEventListenerOptions | boolean): void {
+        target.removeEventListener(name, fn as EventListener, options as any);
+        for (const entry of this.eventTasks) {
+            if (entry.target === target && entry.name === name && entry.fn === fn) {
+                this.eventTasks.delete(entry);
+                break;
+            }
+        }
     }
 }

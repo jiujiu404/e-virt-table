@@ -1,18 +1,18 @@
 import type Cell from './Cell';
 import type CellHeader from './CellHeader';
-import type { RuleItem } from 'async-validator';
+import type { Rule, Rules } from './Validator';
 import Config from './Config';
 export type OptionalizeExcept<T, K extends keyof T> = Partial<Omit<T, K>> & Required<Pick<T, K>>;
 export type EVirtTableOptions = {
-    data: any[];
-    footerData?: any[];
+    data: Record<string, any>[];
+    footerData?: Record<string, any>[];
     columns: Column[];
     config?: ConfigType;
     overlayerElement?: HTMLDivElement;
     editorElement?: HTMLDivElement;
-    selectorToolsElement?: HTMLDivElement;
     emptyElement?: HTMLDivElement;
     contextMenuElement?: HTMLDivElement;
+    loadingElement?: HTMLDivElement;
 };
 
 export type EventCallback = (...args: any[]) => void;
@@ -39,23 +39,38 @@ export type OverflowTooltipPlacement =
 
 export type VerticalAlign = 'top' | 'middle' | 'bottom';
 export type Align = 'left' | 'center' | 'right';
-export type Fixed = 'left' | 'right';
-export type Type = 'index' | 'selection' | 'index-selection' | 'tree' | 'number';
+export type Fixed = 'left' | 'right' | '';
+export type Type = 'index' | 'selection' | 'index-selection' | 'tree' | 'selection-tree' | 'tree-selection' | 'number';
 
 export type TypeCheckbox =
     | 'checkbox-uncheck'
     | 'checkbox-check'
     | 'checkbox-check-disabled'
     | 'checkbox-disabled'
-    | 'checkbox-hover'
     | 'checkbox-indeterminate';
 export type CellType = 'header' | 'body' | 'footer';
 export type FooterPosition = 'top' | 'bottom';
 export type RowType = CellType;
+export type MenuItemEvent =
+    | 'copy'
+    | 'paste'
+    | 'cut'
+    | 'clearSelected'
+    | 'fixedLeft'
+    | 'fixedRight'
+    | 'fixedNone'
+    | 'hide'
+    | 'resetHeader'
+    | 'visible';
 export type MenuItem = {
     label: string;
-    value: string | 'copy' | 'paste' | 'cut' | 'clearSelected';
+    value: string | MenuItemEvent;
     event?: Function;
+    icon?: string;
+    divider?: boolean;
+    disabled?: boolean;
+    children?: MenuItem[];
+    key?: string;
 };
 export type OverlayerView = {
     key: 'left' | 'center' | 'right';
@@ -77,16 +92,10 @@ export type ContextmenuItem = {
     render: Function;
 };
 export type Render = Function | string | undefined;
-export interface Rule extends RuleItem {
-    column?: Column;
-    row?: any; // 这里可以定义更具体的类型，根据你的需求
-    rowIndex?: number;
-    colIndex?: number;
-}
-export type Rules = Rule | Rule[];
-export type Descriptor = Record<string, Rules>;
+
 export type ValidateItemError = {
-    rowIndex: number;
+    rowKey: string;
+    rowIndex?: number; // 废弃
     key: string;
     message: string;
 };
@@ -98,6 +107,7 @@ export type Position = {
     height: number;
     top: number;
     bottom: number;
+    calculatedHeight: number;
 };
 export type PastedDataOverflow = {
     maxY: number;
@@ -114,6 +124,11 @@ export type SelectionMap = {
     row: any;
 };
 
+export type SortDirection = 'asc' | 'desc' | 'none';
+export type SortStateMapItem = { direction: SortDirection; timestamp: number };
+export type SortStateMap = Map<string, SortStateMapItem>;
+export type SortByType = 'number' | 'string' | 'date' | 'api' | ((a: any, b: any) => number);
+
 export interface Column {
     key: string;
     title: string;
@@ -124,7 +139,12 @@ export interface Column {
     hoverIconName?: string;
     placeholder?: string;
     width?: number;
+    minWidth?: number;
+    maxWidth?: number;
     widthFillDisable?: boolean;
+    headerAlign?: Align;
+    headerVerticalAlign?: VerticalAlign;
+    hideHeaderSelection?: boolean;
     align?: Align;
     verticalAlign?: VerticalAlign;
     fixed?: Fixed;
@@ -133,27 +153,57 @@ export interface Column {
     colspan?: number;
     rowspan?: number;
     sort?: number;
+    sortBy?: SortByType;
+    sortIconName?: string; // 默认排序图标
+    sortAscIconName?: string; // 升序排序图标
+    sortDescIconName?: string; // 降序排序图标
+    parentKey?: string;
     hide?: boolean | Function;
     render?: Function | string;
     renderFooter?: Function | string;
     renderHeader?: Function | string;
     formatter?: FormatterMethod;
     formatterFooter?: FormatterMethod;
+    autoRowHeight?: boolean;
     overflowTooltipShow?: boolean;
+    overflowTooltipHeaderShow?: boolean;
     overflowTooltipMaxWidth?: number;
     overflowTooltipPlacement?: OverflowTooltipPlacement;
     required?: boolean;
     readonly?: boolean;
     children?: Column[];
     column?: Column;
-    rules?: Rules;
+    rules?: Rules | Rule;
     options?: any;
+    dragDisabled?: boolean;
+    hideDisabled?: boolean;
+    fixedDisabled?: boolean;
+    selectorCellValueType?: SelectorCellValueType;
+    maxLineClamp?: LineClampType; // 行高超出多少行显示省略号
+    maxLineClampHeader?: LineClampType; // 表头行高超出多少行显示省略号
 }
+export type LineClampType = number | 'auto';
+export type HistoryAction = 'back' | 'forward' | 'none';
+export type SelectorCellValueType = 'displayText' | 'value';
+
+export type TreeSelectMode = 'auto' | 'cautious' | 'strictly';
 export type OverlayerTooltip = {
     style: any;
     text: string;
     show: boolean;
 };
+export type CustomHeader = {
+    fixedData?: Record<string, Fixed | ''>;
+    sortData?: Record<string, number>;
+    hideData?: Record<string, boolean>;
+    resizableData?: Record<string, number>;
+};
+export interface ColumnDragChangeEvent {
+    source: CellHeader;
+    target: CellHeader;
+    columns: Column[];
+}
+
 export type OverlayerContextmenu = {
     style: any;
     list: any[];
@@ -162,6 +212,7 @@ export type OverlayerContextmenu = {
 export type CellStyleOptions = {
     color?: string;
     backgroundColor?: string;
+    font?: string;
 };
 export type CellParams = {
     row: any;
@@ -169,6 +220,11 @@ export type CellParams = {
     colIndex: number;
     column: Column;
     value: any;
+};
+export type RowParams = {
+    row: any;
+    rowIndex: number;
+    rowKey: string;
 };
 export type CellHeaderParams = {
     colIndex: number;
@@ -180,6 +236,14 @@ export type BeforeChangeItem = {
     value: any;
     oldValue: any;
     row: any;
+};
+export type BeforeValueChangeItem = {
+    rowKey: string;
+    key: string;
+    value: any;
+    oldValue?: any;
+    row?: any;
+    errorTip?: boolean;
 };
 export type BeforeSetSelectorParams = {
     focusCell?: Cell;
@@ -240,6 +304,10 @@ export type EditorOptions = {
     type: string;
     props: any;
 };
+export type RowMaxHeightData = {
+    key: string;
+    height: number;
+};
 export type ConfigType = Partial<Config>;
 export type FilterMethod = (rows: any[]) => any[];
 export type FormatterMethod = (params: CellParams) => string | void;
@@ -255,8 +323,8 @@ export type SpanMethod = (params: SpanParams) => SpanType | void;
 export type SelectableMethod = (params: SelectableParams) => boolean | void;
 export type ExpandLazyMethod = (params: CellParams) => Promise<any[]>;
 export type BeforeCellValueChangeMethod = (
-    changeList: BeforeChangeItem[],
-) => BeforeChangeItem[] | Promise<BeforeChangeItem[]>;
+    changeList: BeforeValueChangeItem[],
+) => BeforeValueChangeItem[] | Promise<BeforeValueChangeItem[]>;
 export type BeforePasteDataMethod = (
     changeList: BeforeChangeItem[],
     xArr: number[],

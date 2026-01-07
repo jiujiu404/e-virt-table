@@ -4,12 +4,13 @@ import EventBrowser from './EventBrowser';
 import EventBus, { EventCallback } from './EventBus';
 import Paint from './Paint';
 import Config from './Config';
-import { ChangeItem, Column, EVirtTableOptions } from './types';
+import { ChangeItem, Column, EVirtTableOptions, RowParams } from './types';
 import Icons from './Icons';
 import CellHeader from './CellHeader';
 import Row from './Row';
 import Cell from './Cell';
 import EventTable from './EventTable';
+import { FinderResult } from './FinderBar';
 export type ConfigType = Partial<typeof Config>;
 export type containerElementOptions = {
     containerElement: HTMLDivElement;
@@ -20,6 +21,7 @@ export type containerElementOptions = {
     selectorToolsElement: HTMLDivElement;
     emptyElement?: HTMLDivElement;
     contextMenuElement?: HTMLDivElement;
+    loadingElement?: HTMLDivElement;
 };
 export type HeaderOptions = {
     x: number;
@@ -35,6 +37,7 @@ export type HeaderOptions = {
     fixedLeftCellHeaders: [];
     fixedRightCellHeaders: [];
     renderCenterCellHeaders: [];
+    allCellHeaders: CellHeader[];
 };
 export type BodyOptions = {
     x: number;
@@ -82,23 +85,35 @@ export default class Context {
     selectorToolsElement: HTMLDivElement;
     emptyElement?: HTMLDivElement;
     contextMenuElement?: HTMLDivElement;
+    loadingElement?: HTMLDivElement;
     stageWidth = 0;
     stageHeight = 0;
     paint: Paint;
     icons: Icons;
+    domSelectionStr = '';
     isMouseoverTargetContainer = false;
     mousedown = false;
     isPointer = false;
+    isEmpty = false; // 是否空数据
     rowResizing = false; // 行调整大小中
     columnResizing = false; // 列调整大小中
     scrollerMove = false; // 滚动条移动中
     scrollerFocus = false; // 滚动条focus中
     autofillMove = false; // 自动填充移动中
     selectorMove = false; // 选择器移动中
+    disableHoverIconClick = false; // 禁用hoverIconClick,防止填充选择器移动时，触发hoverIconClick
+    selectColsIng = false; // 选择列中
+    selectRowsIng = false; // 选择行中
+    dragHeaderIng = false; // 拖拽表头中
+    finding = false; // 查找中
     adjustPositioning = false; // 调整位置中
+    contextMenuIng = false; // 右键菜单中
     editing = false; // 编辑中
+    loading = false; // 加载中
     onlyMergeCell = false; // 只有合并单元格
     selectOnlyOne = false; // 只选择一个
+    hasSelection = false; // 是否有选中
+    hasTree = false; // 是否有树形结构
     scrollY = 0;
     scrollX = 0;
     fixedLeftWidth = 0;
@@ -109,10 +124,13 @@ export default class Context {
     hoverRow?: Row;
     clickCell?: Cell;
     focusCell?: Cell;
+    currentCell?: Cell;
     hoverCell?: Cell;
     clickCellHeader?: CellHeader;
     focusCellHeader?: CellHeader;
     hoverCellHeader?: CellHeader;
+    mouseX = 0;
+    mouseY = 0;
     body: BodyOptions = {
         x: 0,
         y: 0,
@@ -144,6 +162,7 @@ export default class Context {
         visibleWidth: 0,
         visibleLeafColumns: [],
         leafCellHeaders: [],
+        allCellHeaders: [],
         renderLeafCellHeaders: [],
         renderCellHeaders: [],
         fixedLeftCellHeaders: [],
@@ -162,6 +181,12 @@ export default class Context {
         xArr: [-1, -1],
         yArr: [-1, -1],
     };
+    finderBar: FinderResult={
+        text: '',
+        rowIndex: -1,
+        colIndex: -1,
+        type: 'body',
+    };
     database: Database;
     history: History;
     config: Config;
@@ -174,6 +199,7 @@ export default class Context {
             editorElement,
             selectorToolsElement,
             emptyElement,
+            loadingElement,
             contextMenuElement,
         } = containerOptions;
         this.containerElement = containerElement;
@@ -184,6 +210,7 @@ export default class Context {
         this.editorElement = editorElement;
         this.selectorToolsElement = selectorToolsElement;
         this.emptyElement = emptyElement;
+        this.loadingElement = loadingElement;
         this.contextMenuElement = contextMenuElement;
         this.config = new Config(options.config || {});
         this.eventBus = new EventBus();
@@ -197,25 +224,21 @@ export default class Context {
     setConfig(config: Config) {
         this.config = new Config(config);
     }
-    setItemValueByEditor(rowKey: string, key: string, value: any, history = true, reDraw = true) {
+    setItemValueByEditor(rowKey: string, key: string, value: any, history = true, reDraw = true, checkReadonly = true) {
         // 启用合并单元格关联
         if (this.config.ENABLE_MERGE_CELL_LINK) {
             const cell = this.database.getVirtualBodyCellByKey(rowKey, key);
             if (cell && (cell.mergeRow || cell.mergeCol)) {
                 const { dataList } = cell.getSpanInfo();
                 const data = dataList.map((item: any) => ({ ...item, value }));
-                this.database.batchSetItemValue(data, history);
+                this.database.batchSetItemValue(data, history, checkReadonly);
                 return;
             }
         }
-        this.database.setItemValue(rowKey, key, value, history, reDraw, true);
+        this.database.setItemValue(rowKey, key, value, history, reDraw, true, checkReadonly);
     }
-    setSelectorToolsUpdate(options: any[]) {
-        console.log('in context public "setSelectorToolsUpdate"');
-        this.emit('selector-update', options); // 复用 Context 的事件系统
-        console.log('setSelectorToolsUpdate emit selector-update');
-    }
-    batchSetItemValueByEditor(_list: ChangeItem[], history = true) {
+
+    batchSetItemValueByEditor(_list: ChangeItem[], history = true, checkReadonly = true) {
         // 启用合并单元格关联
         if (this.config.ENABLE_MERGE_CELL_LINK) {
             const list: ChangeItem[] = [];
@@ -230,17 +253,23 @@ export default class Context {
                     list.push(...data);
                 }
             });
-            this.database.batchSetItemValue(list, history);
+            this.database.batchSetItemValue(list, history, checkReadonly);
         } else {
-            this.database.batchSetItemValue(_list, history);
+            this.database.batchSetItemValue(_list, history, checkReadonly);
         }
     }
     setFocusCell(cell: Cell) {
         if (this.focusCell === cell) return;
         if (this.focusCell?.rowKey !== cell.rowKey) {
             // 提前设置一下，保证rowFocusChange事件，能用focusCell
-            this.focusCell = cell;
+            this.currentCell = cell;
             this.emit('rowFocusChange', cell);
+            const data: RowParams = {
+                rowIndex: cell.rowIndex,
+                rowKey: cell.rowKey,
+                row: cell.row,
+            };
+            this.emit('currentRowChange', data);
         }
         this.focusCell = cell;
         this.emit('cellFocusChange', cell);
@@ -276,9 +305,15 @@ export default class Context {
             for (let ci = 0; ci <= xArr[1] - xArr[0]; ci++) {
                 const rowIndex = ri + yArr[0];
                 const colIndex = ci + xArr[0];
-                const item = this.database.getItemValueForRowIndexAndColIndex(rowIndex, colIndex);
-                if (item) {
-                    cellsData.push(item.value);
+                const cell = this.database.getVirtualBodyCell(rowIndex, colIndex);
+                if (cell) {
+                    // 选择器值类型
+                    if (cell.selectorCellValueType === 'displayText') {
+                        cellsData.push(cell.displayText);
+                    } else {
+                        // 默认value
+                        cellsData.push(cell.getValue());
+                    }
                 }
             }
             text += `${cellsData.join('\t')}\r`;
@@ -339,6 +374,12 @@ export default class Context {
             scrollY = scrollMaxY;
         }
         this.emit('setScrollY', scrollY);
+    }
+    startAdjustPosition(e: MouseEvent) {
+        this.emit('startAdjustPosition', e);
+    }
+    stopAdjustPosition() {
+        this.emit('stopAdjustPosition');
     }
     isTarget(e: Event): boolean {
         if (!this.containerElement.contains(e.target as Node)) {

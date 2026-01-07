@@ -46,30 +46,23 @@ export default class Tooltip {
         this.init();
     }
     private init() {
-        this.ctx.on('mousemove', (e) => {
-            // 鼠标移动时，判断是否在target上，不在则隐藏
-            if (!this.ctx.isTarget(e)) {
-              return;
-            }
-            const targetRect = this.ctx.containerElement.getBoundingClientRect();
-            if (!targetRect) {
+        this.floatingEl.addEventListener('mouseleave', () => {
+            this.hide();
+        });
+        this.ctx.on('mouseout', (e) => {
+            if (this.floatingEl.contains(e.relatedTarget as Node)) {
                 return;
             }
-            if (
-                e.clientX < targetRect.x ||
-                e.clientX > targetRect.x + targetRect.width ||
-                e.clientY < targetRect.y ||
-                e.clientY > targetRect.y + targetRect.height
-            ) {
-                this.hide();
-            }
+            this.hide();
         });
-        // 开始编辑时隐藏
+        this.ctx.on('onScroll', () => {
+            this.hide();
+        });
         this.ctx.on('startEdit', () => {
             this.hide();
         });
-        this.ctx.on('visibleCellHoverChange', (cell,e) => {
-            const contains = this.floatingEl.contains(e.target);;
+        this.ctx.on('visibleCellHoverChange', (cell, e) => {
+            const contains = this.floatingEl.contains(e.target);
             if (contains) {
                 return;
             }
@@ -78,16 +71,57 @@ export default class Tooltip {
                 this.show(cell);
             }
         });
-        this.ctx.on('visibleCellMouseleave', (_,e) => {
-            const contains = this.floatingEl.contains(e.target);;
+        this.ctx.on('visibleCellMouseleave', (_, e) => {
+            const contains = this.floatingEl.contains(e.target);
             if (contains) {
                 return;
             }
             this.hide();
         });
+        this.ctx.on('cellHeaderMouseleave', (_, e) => {
+            const contains = this.floatingEl.contains(e.target);
+            if (contains) {
+                return;
+            }
+            this.hide();
+        });
+        this.ctx.on('cellHeaderHoverChange', (cell, e) => {
+            const contains = this.floatingEl.contains(e.target);
+            if (contains) {
+                return;
+            }
+            if (cell.ellipsis) {
+                this.show(cell);
+            }
+        });
+        this.ctx.on('cellFooterMouseleave', (_, e) => {
+            const contains = this.floatingEl.contains(e.target);
+            if (contains) {
+                return;
+            }
+            this.hide();
+        });
+        this.ctx.on('cellFooterHoverChange', (cell, e) => {
+            const contains = this.floatingEl.contains(e.target);
+            if (contains) {
+                return;
+            }
+            if (cell.ellipsis) {
+                this.show(cell);
+            }
+        });
+        this.ctx.on('cellShowTooltip', (cell, message) => {
+            this.show(cell, message);
+        });
+        this.ctx.on('cellHideTooltip', () => {
+            this.hide();
+        });
     }
-    private show(cell: Cell) {
+    private show(cell: Cell, message?: string) {
         // 如果没有设置overflowTooltipShow=true，则不显示
+        if (this.ctx.contextMenuIng) {
+            return;
+        }
         if (!cell.overflowTooltipShow) {
             return;
         }
@@ -100,6 +134,9 @@ export default class Tooltip {
         // 如果有message，则显示message
         if (cell.message) {
             text = cell.message;
+        }
+        if (message) {
+            text = message;
         }
         const targetRect = this.ctx.containerElement.getBoundingClientRect();
         if (!targetRect) {
@@ -175,7 +212,7 @@ export default class Tooltip {
             }
         });
     }
-    private hide() {
+    hide() {
         if (!this.enable) {
             return;
         }

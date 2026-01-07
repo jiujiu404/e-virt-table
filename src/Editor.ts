@@ -37,24 +37,23 @@ export default class Editor {
                 this.doneEdit();
             }
         });
-        this.ctx.on('cellHeaderMousedown', () => {
-            if (this.enable) {
-                this.doneEdit();
-            }
-            this.cellTarget = null;
-        });
         this.ctx.on('hoverIconClick', (cell) => {
-            // 没有编辑器就不进入编辑模式
-            if (cell.editorType === 'none') {
+            if (this.ctx.disableHoverIconClick) {
                 return;
             }
             this.editCell(cell.rowIndex, cell.colIndex);
+        });
+        this.ctx.on('cellMousedown', () => {
+            this.inputEl.focus({ preventScroll: true });
         });
         this.ctx.on('keydown', (e) => {
             if (!this.ctx.isTarget(e)) {
                 return;
             }
             if (!this.ctx.focusCell) {
+                return;
+            }
+            if (this.ctx.finding) {
                 return;
             }
             if (e.code === 'Escape' && this.ctx.editing) {
@@ -67,7 +66,7 @@ export default class Editor {
                 this.doneEdit();
                 return;
             }
-            if ((e.altKey || e.metaKey) && e.code === 'Enter' && this.ctx.editing && this.inputEl) {
+            if ((e.altKey || e.metaKey) && e.key === 'Enter' && this.ctx.editing && this.inputEl) {
                 e.preventDefault();
                 const cursorPos = this.inputEl.selectionStart; // 获取光标位置
                 const textBefore = this.inputEl.value.substring(0, cursorPos); // 光标前的文本
@@ -89,7 +88,7 @@ export default class Editor {
                 this.ctx.emit('setMoveFocus', 'RIGHT');
                 return;
             }
-            if (e.code === 'Enter' && this.ctx.editing) {
+            if (e.key === 'Enter' && this.ctx.editing) {
                 e.preventDefault();
                 this.doneEdit();
                 if (e.shiftKey) {
@@ -99,7 +98,7 @@ export default class Editor {
                 this.ctx.emit('setMoveFocus', 'BOTTOM');
                 return;
             }
-            if (e.code === 'Enter' && !this.ctx.editing) {
+            if (e.key === 'Enter' && !this.ctx.editing) {
                 e.preventDefault();
                 this.startEdit();
                 return;
@@ -145,18 +144,12 @@ export default class Editor {
             if (functionKeys.includes(key)) {
                 return;
             }
-            // 除了上面的建其他都开始编辑
             this.startEdit(true);
         });
-        this.ctx.on('adjustBoundaryPosition', (cell) => {
-            // 调整位置会触发重绘可能会导致cellClick事件不能触发，调整位置时需要赋值cellTarget
-            this.cellTarget = cell;
-            const { xArr, yArr } = this.ctx.selector;
-            this.selectorArrStr = JSON.stringify(xArr) + JSON.stringify(yArr);
-        });
-        this.ctx.on('cellClick', (cell: Cell) => {
-            // 如果是调整边界位置，不进入编辑模式
-            if (this.ctx.adjustPositioning) {
+        // 重绘可能会导致cellClick事件不能触发，调整用按下cellMouseup按下延时赋值cellTarget
+        this.ctx.on('cellMouseup', (cell: Cell) => {
+            // 如果是选择器，不进入编辑模式
+            if (this.ctx.isPointer) {
                 return;
             }
             // 不在区域内
@@ -197,6 +190,12 @@ export default class Editor {
                 }
             }
         });
+        this.ctx.on('mousedownBodyOutside', () => {
+            if (this.enable) {
+                this.doneEdit();
+            }
+            this.cellTarget = null;
+        });
     }
     private isInSelectorRange(rowIndex: number, colIndex: number) {
         const { xArr, yArr } = this.ctx.selector;
@@ -219,18 +218,25 @@ export default class Editor {
     private initTextEditor() {
         // 初始化文本编辑器
         this.inputEl = document.createElement('textarea');
+        this.inputEl.id = 'e-virt-table-editor-textarea';
         this.inputEl.setAttribute('rows', '1');
+        this.inputEl.setAttribute('tabindex', '-1');
         // 监听输入事件，自动调整高度
         this.inputEl.addEventListener('input', this.autoSize.bind(this));
-        this.inputEl.addEventListener('blur', () => {
-            this.doneEdit();
-        });
         this.editorEl = this.ctx.editorElement;
         this.inputEl.className = 'e-virt-table-editor-textarea';
         this.editorEl.appendChild(this.inputEl);
         this.ctx.containerElement.appendChild(this.editorEl);
     }
     private autoSize() {
+        // 针对数字类型提示错误信息
+        const value = this.inputEl.value;
+        if (this.cellTarget && this.cellTarget.type === 'number' && value !== '') {
+            this.ctx.emit('cellHideTooltip');
+            if (!/^-?\d+(\.\d+)?$/.test(value)) {
+                this.ctx.emit('cellShowTooltip', this.cellTarget, this.ctx.config.NUMBER_ERROR_TIP);
+            }
+        }
         this.inputEl.style.height = 'auto'; // 重置高度
         let scrollHeight = this.inputEl.scrollHeight;
         let maxHeight = this.ctx.body.visibleHeight;
@@ -258,6 +264,10 @@ export default class Editor {
     private startEditByInput(cell: Cell, ignoreValue = false) {
         const value = ignoreValue ? null : cell.getValue();
         const { editorType } = cell;
+        // 没有编辑器的情况下不进入编辑模式
+        if (editorType === 'none') {
+            return;
+        }
         cell.update(); // 更新单元格信息
         if (this.ctx.config.ENABLE_MERGE_CELL_LINK) {
             cell.updateSpanInfo(); // 更新合并单元格信息
@@ -275,24 +285,24 @@ export default class Editor {
         }
         // 显示编辑器
         this.editorEl.style.display = 'inline-block';
+        this.editorEl.style.zIndex = '100';
         this.editorEl.style.left = `${this.drawX - 1}px`;
         this.editorEl.style.top = `${this.drawY - 1}px`;
         this.editorEl.style.bottom = `auto`;
         this.editorEl.style.maxHeight = `${maxHeight}px`;
         if (editorType === 'text') {
-            this.inputEl.style.display = 'block';
+            this.inputEl.style.display = 'inline-block';
             this.inputEl.style.minWidth = `${width - 1}px`;
             this.inputEl.style.minHeight = `${height - 1}px`;
             this.inputEl.style.maxHeight = `${maxHeight}px`;
             this.inputEl.style.width = `${width - 1}px`;
             this.inputEl.style.height = `auto`;
             this.inputEl.style.padding = `${CELL_PADDING}px`;
+            this.inputEl.value = ''; // 清空
             if (value !== null) {
                 this.inputEl.value = value;
+                this.inputEl.focus({ preventScroll: true });
             }
-            this.inputEl.focus({ preventScroll: true });
-            const length = this.inputEl.value.length;
-            this.inputEl.setSelectionRange(length, length);
         } else {
             this.inputEl.style.display = 'none';
         }
@@ -315,12 +325,9 @@ export default class Editor {
                 this.ctx.setItemValueByEditor(rowKey, key, textContent, true);
                 // this.cellTarget.setValue(textContent);
             }
-            this.inputEl.value = '';
         }
     }
     startEdit(ignoreValue = false) {
-        // 触发绘制，刷新
-        this.ctx.emit('draw');
         this.cancel = false;
         // 如果不启用点击选择器编辑
         const { ENABLE_EDIT_CLICK_SELECTOR } = this.ctx.config;
@@ -341,14 +348,11 @@ export default class Editor {
         }
         // 可视区可见
         const isVisible = focusCell.isVerticalVisible() && focusCell.isHorizontalVisible();
-        if(!isVisible){
+        if (!isVisible) {
             return;
         }
-        const { rowKey, key, editorType } = focusCell;
-        // 没有编辑器的情况下不进入编辑模式
-        if (editorType === 'none') {
-            return;
-        }
+        const { rowKey, key } = focusCell;
+
         const readonly = this.ctx.database.getReadonly(rowKey, key);
         if (focusCell && !readonly) {
             this.enable = true;
@@ -356,6 +360,8 @@ export default class Editor {
             this.cellTarget = focusCell;
             this.startEditByInput(this.cellTarget, ignoreValue);
             this.ctx.emit('startEdit', this.cellTarget);
+            // 触发绘制，刷新
+            this.ctx.emit('draw');
         }
     }
     editCell(rowIndex: number, colIndex: number) {
@@ -387,20 +393,32 @@ export default class Editor {
             this.cellTarget = focusCell;
             this.startEditByInput(this.cellTarget);
             this.ctx.emit('startEdit', this.cellTarget);
+            // 触发绘制，刷新
+            this.ctx.emit('draw');
         }
     }
     doneEdit() {
         if (!this.enable) {
             return;
         }
+        const {
+            header,
+            config: { CELL_HEIGHT },
+        } = this.ctx;
         this.doneEditByInput();
+        this.ctx.emit('cellHideTooltip');
         this.ctx.emit('doneEdit', this.cellTarget);
         this.enable = false;
         this.ctx.editing = false;
-        this.ctx.containerElement.focus({ preventScroll: true });
-        // 隐藏编辑器
-        this.editorEl.style.display = 'none';
-        this.ctx.emit('drawView');
+        this.inputEl.style.display = 'inline-block';
+        this.editorEl.style.left = '0px';
+        this.editorEl.style.top = `${header.height}px`;
+        this.editorEl.style.maxHeight = `${CELL_HEIGHT}px`;
+        this.editorEl.style.zIndex = '-1';
+        setTimeout(() => {
+            this.inputEl.focus({ preventScroll: true });
+        }, 0);
+        this.ctx.emit('draw');
     }
     clearEditor() {
         this.doneEdit();
@@ -408,7 +426,7 @@ export default class Editor {
         this.selectorArrStr = '';
         this.ctx.clearSelector();
         this.ctx.focusCell = undefined;
-        this.ctx.emit('drawView');
+        this.ctx.emit('draw');
     }
     destroy() {
         this.editorEl?.remove();

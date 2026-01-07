@@ -15,6 +15,11 @@ export default defineConfig({
     vite: {
         plugins: [middlewaresPlugin()],
     },
+    themeConfig: {
+        search: {
+            provider: 'local',
+        },
+    },
     locales: {
         zh: {
             label: '中文',
@@ -23,6 +28,22 @@ export default defineConfig({
                 // https://vitepress.dev/reference/default-theme-config
                 search: {
                     provider: 'local',
+                    options: {
+                        translations: {
+                            button: {
+                                buttonText: '搜索文档',
+                                buttonAriaLabel: '搜索文档',
+                            },
+                            modal: {
+                                noResultsText: '无法找到相关结果',
+                                resetButtonTitle: '清除查询条件',
+                                footer: {
+                                    selectText: '选择',
+                                    navigateText: '切换',
+                                },
+                            },
+                        },
+                    },
                 },
                 socialLinks: [
                     { icon: 'github', link: 'https://github.com/laichuangwen/e-virt-table' }, // 替换为您的 GitHub 仓库链接
@@ -44,7 +65,8 @@ export default defineConfig({
                         text: '表格例子',
                         items: [
                             { text: '虚拟滚动', link: '/zh/table/virtualScroll' },
-                            { text: '过滤&排序', link: '/zh/table/filter' },
+                            { text: '过滤', link: '/zh/table/filter' },
+                            { text: '排序', link: '/zh/table/sort' },
                             { text: '滚动条', link: '/zh/table/scroller' },
                             { text: '主题', link: '/zh/table/theme' },
                             { text: '宽度', link: '/zh/table/width' },
@@ -58,6 +80,7 @@ export default defineConfig({
                             { text: '树形', link: '/zh/table/tree' },
                             { text: '溢出提示', link: '/zh/table/tooltip' },
                             { text: '多级表头', link: '/zh/table/header' },
+                            { text: '列拖拽', link: '/zh/table/column-drag' },
                             { text: 'footer合计', link: '/zh/table/footer' },
                             { text: '合并', link: '/zh/table/span' },
                             { text: '格式化', link: '/zh/table/formatter' },
@@ -71,6 +94,8 @@ export default defineConfig({
                             { text: '右键菜单', link: '/zh/table/context-menu' },
                             { text: '历史回退', link: '/zh/table/history' },
                             { text: '插槽（覆盖层）', link: '/zh/table/overlayer' },
+                            { text: '自定义表头', link: '/zh/table/custom-header' },
+                            { text: '查找器', link: '/zh/table/finder-bar' },
                         ],
                     },
                     {
@@ -98,7 +123,9 @@ export default defineConfig({
             lang: 'en',
             themeConfig: {
                 // https://vitepress.dev/reference/default-theme-config
-
+                search: {
+                    provider: 'local',
+                },
                 sidebar: [
                     {
                         text: 'Introduction',
@@ -116,7 +143,8 @@ export default defineConfig({
                         text: 'Table',
                         items: [
                             { text: 'Virtual Scroll', link: '/en/table/virtualScroll' },
-                            { text: 'filter&sort', link: '/en/table/filter' },
+                            { text: 'filter', link: '/en/table/filter' },
+                            { text: 'sort', link: '/en/table/sort' },
                             { text: 'Scrollbar', link: '/en/table/scroller' },
                             { text: 'Theme', link: '/en/table/theme' },
                             { text: 'Width', link: '/en/table/width' },
@@ -130,6 +158,7 @@ export default defineConfig({
                             { text: 'Tree', link: '/en/table/tree' },
                             { text: 'Overflow Tooltip', link: '/en/table/tooltip' },
                             { text: 'Header Grouping', link: '/en/table/header' },
+                            { text: 'Column Drag', link: '/en/table/column-drag' },
                             { text: 'Footer', link: '/en/table/footer' },
                             { text: 'Merge', link: '/en/table/span' },
                             { text: 'Formatter', link: '/en/table/formatter' },
@@ -143,6 +172,8 @@ export default defineConfig({
                             { text: 'Context Menu', link: '/en/table/context-menu' },
                             { text: 'History', link: '/en/table/history' },
                             { text: 'Slot (Overlay)', link: '/en/table/overlayer' },
+                            { text: 'Custom Header', link: '/en/table/custom-header' },
+                            { text: 'Finder Bar', link: '/en/table/finder-bar' },
                         ],
                     },
                     {

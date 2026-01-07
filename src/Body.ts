@@ -61,6 +61,7 @@ export default class Body {
         this.visibleWidth = this.ctx.stageWidth - SCROLLER_TRACK_SIZE;
         // 底部高度
         const footerHeight = this.ctx.footer.height;
+        this.ctx.isEmpty = !this.data.length;
         if (!this.data.length && !HEIGHT) {
             this.height = EMPTY_BODY_HEIGHT;
         } else if (!this.data.length && HEIGHT) {
@@ -91,7 +92,7 @@ export default class Body {
         if (stageHeight > 0) {
             // this.ctx.canvasElement.height = stageHeight;
             this.ctx.stageHeight = Math.floor(stageHeight);
-            this.ctx.stageElement.style.height = `${this.ctx.stageHeight - 0.5}px`;
+            this.ctx.stageElement.style.height = `${this.ctx.stageHeight}px`;
         }
         // 可视区高度
         let _visibleHeight = this.ctx.stageHeight - header.height - SCROLLER_TRACK_SIZE;
@@ -114,8 +115,8 @@ export default class Body {
         const dpr = window.devicePixelRatio || 1; // 获取设备像素比
         const canvasWidth = this.ctx.stageWidth * dpr;
         const canvasHeight = this.ctx.stageHeight * dpr;
-        canvasElement.width = Math.floor(canvasWidth);
-        canvasElement.height = Math.floor(canvasHeight);
+        canvasElement.width = Math.round(canvasWidth);
+        canvasElement.height = Math.round(canvasHeight);
         const isEmpty = !this.data.length ? 'empty' : 'not-empty';
         this.ctx.emit('emptyChange', {
             isEmpty,
@@ -127,28 +128,30 @@ export default class Body {
             height: !this.data.length ? EMPTY_BODY_HEIGHT + footerHeight : 0,
         });
         // 外层容器样式
-        this.ctx.canvasElement.setAttribute(
-            'style',
-            ` height:${this.ctx.stageHeight}px;width:${this.ctx.stageWidth}px;`,
-        );
+        const _cssWidth = Math.round((canvasElement.width / dpr) * 10000) / 10000;
+        const _cssHeight = Math.round((canvasElement.height / dpr) * 10000) / 10000;
+        this.ctx.canvasElement.setAttribute('style', `height:${_cssHeight}px;width:${_cssWidth}px;`);
         this.ctx.paint.scale(dpr);
     }
     // 调整行的高度
     private initResizeRow() {
-        const {
-            config: { ENABLE_RESIZE_ROW },
-        } = this.ctx;
-        if (!ENABLE_RESIZE_ROW) {
-            return;
-        }
         this.ctx.on('resize', () => {
+            if (!this.ctx.config.ENABLE_RESIZE_ROW) {
+                return;
+            }
             this.containerRect = this.ctx.containerElement.getBoundingClientRect();
         });
         this.ctx.on('resizeObserver', () => {
+            if (!this.ctx.config.ENABLE_RESIZE_ROW) {
+                return;
+            }
             this.containerRect = this.ctx.containerElement.getBoundingClientRect();
         });
         // 鼠标移动
         this.ctx.on('mouseup', () => {
+            if (!this.ctx.config.ENABLE_RESIZE_ROW) {
+                return;
+            }
             this.isMouseDown = false;
             if (this.resizeDiff !== 0 && this.resizeTarget) {
                 // 调整宽度
@@ -164,6 +167,9 @@ export default class Body {
             this.clientY = 0;
         });
         this.ctx.on('mousedown', (e) => {
+            if (!this.ctx.config.ENABLE_RESIZE_ROW) {
+                return;
+            }
             if (!this.ctx.isTarget(e)) {
                 return;
             }
@@ -179,6 +185,9 @@ export default class Body {
             this.isMouseDown = true;
         });
         this.ctx.on('mousemove', (e) => {
+            if (!this.ctx.config.ENABLE_RESIZE_ROW) {
+                return;
+            }
             // 编辑中不触发mousemove
             if (this.ctx.editing) return;
             const { offsetY, offsetX } = this.ctx.getOffset(e);
@@ -193,8 +202,10 @@ export default class Body {
             if (this.isResizing && this.resizeTarget) {
                 const resizeTargetHeight = this.resizeTarget.height;
                 let diff = clientY - this.clientY;
-                if (diff + resizeTargetHeight < RESIZE_ROW_MIN_HEIGHT) {
-                    diff = -(resizeTargetHeight - RESIZE_ROW_MIN_HEIGHT);
+                const { calculatedHeight } = this.resizeTarget;
+                const minHeight = calculatedHeight === -1 ? RESIZE_ROW_MIN_HEIGHT : calculatedHeight;
+                if (diff + resizeTargetHeight < minHeight) {
+                    diff = -(resizeTargetHeight - minHeight);
                 }
                 this.resizeDiff = diff;
                 this.ctx.emit('draw');
@@ -289,7 +300,7 @@ export default class Body {
             config: { HEADER_BG_COLOR, SCROLLER_TRACK_SIZE },
         } = this.ctx;
 
-        if (scrollX > 0 && fixedLeftWidth !== 0) {
+        if (scrollX > 0 && fixedLeftWidth !== 0 && !this.ctx.isEmpty) {
             this.ctx.paint.drawShadow(this.x, this.y, fixedLeftWidth, this.height, {
                 fillColor: HEADER_BG_COLOR,
                 side: 'right',
@@ -299,7 +310,11 @@ export default class Body {
             });
         }
         // 右边阴影
-        if (scrollX < Math.floor(header.width - stageWidth - 1) && fixedRightWidth !== SCROLLER_TRACK_SIZE) {
+        if (
+            scrollX < Math.floor(header.width - stageWidth - 1) &&
+            fixedRightWidth !== SCROLLER_TRACK_SIZE &&
+            !this.ctx.isEmpty
+        ) {
             const x = header.width - (this.x + this.width) + stageWidth - fixedRightWidth;
             this.ctx.paint.drawShadow(x, this.y, fixedRightWidth, this.height, {
                 fillColor: HEADER_BG_COLOR,
@@ -367,6 +382,24 @@ export default class Body {
         }
         this.renderRows = rows;
         this.ctx.body.renderRows = rows;
+    }
+    updateAutoHeight(): boolean {
+        const rows = this.ctx.body.renderRows;
+        const hasAutoHeight = rows.some((row) => row.calculatedHeightCells.length > 0);
+        // 如果没有计算格子，不更新
+        if (!hasAutoHeight) {
+            return false;
+        }
+        // 更新计算高度
+        rows.forEach((row) => {
+            row.updateCalculatedHeight();
+        });
+        // 如果有计算格子，重新计算行高
+        const heights = rows.map((row) => ({
+            height: row.calculatedHeight,
+            rowIndex: row.rowIndex,
+        }));
+        return this.ctx.database.setBatchCalculatedRowHeight(heights);
     }
     draw() {
         // 容器背景

@@ -1,5 +1,5 @@
-import Schema, { ValidateError } from 'async-validator';
 import type CellHeader from './CellHeader';
+import Validator, { RuleParam, ValidateResult } from './Validator';
 import type Context from './Context';
 import type {
     CellReadonlyMethod,
@@ -11,17 +11,22 @@ import type {
     SelectableMethod,
     EVirtTableOptions,
     BeforeCellValueChangeMethod,
-    Descriptor,
     SpanInfo,
     SelectionMap,
     ErrorType,
     BeforeChangeItem,
+    HistoryAction,
+    BeforeValueChangeItem,
+    SortByType,
+    SortStateMap,
+    CustomHeader,
+    Fixed,
+    RowMaxHeightData,
 } from './types';
-import { generateShortUUID } from './util';
+import { generateShortUUID, toLeaf, compareDates } from './util';
 import { HistoryItemData } from './History';
 import Cell from './Cell';
 export default class Database {
-    private loading = false;
     private ctx: Context;
     private data: any[];
     private columns: Column[];
@@ -30,13 +35,24 @@ export default class Database {
     private colIndexKeyMap = new Map<number, string>();
     private headerMap = new Map<string, CellHeader>();
     private rowIndexRowKeyMap = new Map<number, string>();
+    private rowKeyRowIndexMap = new Map<string, number>();
     private checkboxKeyMap = new Map<string, string[]>();
     private selectionMap = new Map<string, SelectionMap>();
+    private expandMap = new Map<string, boolean>();
     private originalDataMap = new Map<string, any>();
     private changedDataMap = new Map<string, any>();
-    private validationErrorMap = new Map<string, ValidateError[]>();
+    private validationErrorMap = new Map<string, ValidateResult>();
     private itemRowKeyMap = new WeakMap();
     private bufferData: any[] = [];
+    private customHeader: CustomHeader = {
+        fixedData: {},
+        sortData: {},
+        hideData: {},
+        resizableData: {},
+    };
+
+    overlayerAutoHeightMap = new Map<string, number>();
+    private maxRowHeightCellMap = new Map<string, RowMaxHeightData>(); // 记录每行的计算高度（按 rowKey 存储）
     private bufferCheckState = {
         buffer: false,
         check: false,
@@ -46,30 +62,52 @@ export default class Database {
     private sumHeight = 0;
     private filterMethod: FilterMethod | undefined;
     private positions: Position[] = []; //虚拟滚动位置
+    private sortState: SortStateMap = new Map();
     constructor(ctx: Context, options: EVirtTableOptions) {
         this.ctx = ctx;
         const { data = [], columns = [], footerData = [] } = options;
         this.data = data;
         this.footerData = footerData;
         this.columns = columns;
-        this.setLoading(true);
         this.init();
     }
-    init() {
+    // 初始化默认不忽略清空改变值和校验map
+    init(isClear = true) {
+        this.ctx.paint.clearTextCache();
         this.clearBufferData();
         this.rowKeyMap.clear();
         this.checkboxKeyMap.clear();
         this.colIndexKeyMap.clear();
         this.rowIndexRowKeyMap.clear();
-        this.originalDataMap.clear();
-        this.changedDataMap.clear();
-        this.validationErrorMap.clear();
-        this.itemRowKeyMap = new WeakMap();
-        const { ROW_KEY, ENABLE_RESERVE_SELECTION } = this.ctx.config;
-        // 没有跨页选时清除
-        if (!(ENABLE_RESERVE_SELECTION && ROW_KEY)) {
-            this.selectionMap.clear();
+        this.rowKeyRowIndexMap.clear();
+        // 清空计算高度记录
+        this.maxRowHeightCellMap.clear();
+        // 判断是否有选择和树形结构
+        const _columns = this.getColumns();
+        const leafColumns = toLeaf(_columns);
+        this.ctx.hasSelection = leafColumns.some((item) => item.type === 'selection');
+        this.ctx.hasTree = leafColumns.some((item) => item.type === 'tree');
+        if (isClear) {
+            this.originalDataMap.clear();
+            this.changedDataMap.clear();
+            this.validationErrorMap.clear();
+            const { ROW_KEY } = this.ctx.config;
+            // 清除选中和展开状态，如果没有ROW_KEY清除
+            if (!ROW_KEY) {
+                // 无行主键时直接清除所有状态
+                this.selectionMap.clear();
+                this.expandMap.clear();
+            } else {
+                // 有行主键，根据上下文条件清除部分状态
+                if (!this.ctx.hasSelection) {
+                    this.selectionMap.clear();
+                }
+                if (!this.ctx.hasTree) {
+                    this.expandMap.clear();
+                }
+            }
         }
+        this.itemRowKeyMap = new WeakMap();
         this.initData(this.data);
         this.getData();
         this.bufferCheckState.buffer = false;
@@ -85,14 +123,20 @@ export default class Database {
      * @param dataList
      * @param level
      */
-    private initData(dataList: any[], level: number = 0) {
+    private initData(dataList: any[], level: number = 0, parentRowKeys: string[] = []) {
+        const siblingsLength = dataList.length;
+        const {
+            ROW_KEY = '',
+            DEFAULT_EXPAND_ALL,
+            CELL_HEIGHT,
+            SELECTABLE_METHOD,
+            CHECKBOX_KEY,
+            TREE_CHILDREN_KEY,
+        } = this.ctx.config;
         dataList.forEach((item, index) => {
-            let hasChildren = item._hasChildren || false;
-            if (Array.isArray(item.children) && item.children.length) {
-                hasChildren = true;
-                this.initData(item.children, level + 1);
+            if (TREE_CHILDREN_KEY !== 'children') {
+                item.children = item[TREE_CHILDREN_KEY];
             }
-            const { ROW_KEY = '', DEFAULT_EXPAND_ALL, CELL_HEIGHT, SELECTABLE_METHOD, CHECKBOX_KEY } = this.ctx.config;
             const _rowKey = item[ROW_KEY]; // 行唯一标识,否则就rowKey
             const rowKey = _rowKey !== undefined && _rowKey !== null ? `${_rowKey}` : generateShortUUID();
             this.itemRowKeyMap.set(item, rowKey);
@@ -120,20 +164,31 @@ export default class Database {
                 row: item,
                 check: this.selectionMap.get(rowKey)?.check || false,
             });
+            const expand = DEFAULT_EXPAND_ALL || this.expandMap.get(rowKey) || item._expand || false;
+            this.expandMap.set(rowKey, expand);
             this.rowKeyMap.set(rowKey, {
                 readonly,
                 index,
                 rowIndex: index,
                 level,
                 height,
+                calculatedHeight: -1,
                 check: false,
                 selectable,
-                expand: DEFAULT_EXPAND_ALL,
+                expand,
                 expandLazy: false,
-                hasChildren,
+                hasChildren: item._hasChildren || (Array.isArray(item.children) ? item.children.length > 0 : false),
                 expandLoading: false,
                 item,
+                parentRowKeys,
+                parentRowKey: parentRowKeys[parentRowKeys.length - 1] || '',
+                isLastChild: index === siblingsLength - 1,
             });
+            if (Array.isArray(item.children)) {
+                if (item.children.length) {
+                    this.initData(item.children, level + 1, [...parentRowKeys, rowKey]);
+                }
+            }
         });
     }
     /**
@@ -151,8 +206,42 @@ export default class Database {
         row.item._height = height;
         this.clearBufferData(); // 清除缓存数据
     }
+    // 批量设置行高度
+    setBatchRowHeight(rowIndexHeightList: { rowIndex: number; height: number }[]) {
+        rowIndexHeightList.forEach(({ rowIndex, height }) => {
+            const rowKey = this.rowIndexRowKeyMap.get(rowIndex);
+            if (rowKey) {
+                const row = this.rowKeyMap.get(rowKey);
+                row.height = height;
+                row.item._height = height;
+            }
+        });
+        this.clearBufferData(); // 清除缓存数据
+    }
+    // 批量设置计算行高度
+    setBatchCalculatedRowHeight(rowIndexHeightList: { rowIndex: number; height: number }[]): boolean {
+        // 判断是否需要更新
+        const isNoNeedUpdate = rowIndexHeightList.every(({ height, rowIndex }) => {
+            const position = this.getPositionForRowIndex(rowIndex);
+            return position.calculatedHeight === height;
+        });
+        if (isNoNeedUpdate) {
+            return false;
+        }
+        rowIndexHeightList.forEach(({ rowIndex, height }) => {
+            const rowKey = this.rowIndexRowKeyMap.get(rowIndex);
+            if (rowKey) {
+                const row = this.rowKeyMap.get(rowKey);
+                const { height: rowMaxHeight = -1 } = this.getMaxRowHeightItem(rowKey) || {};
+                row.calculatedHeight = Math.max(height, rowMaxHeight);
+            }
+        });
+        this.clearBufferData(); // 清除缓存数据
+        this.getData(); // 重新获取数据
+        return true;
+    }
     /**
-     *
+     * 获取所有行数据（平铺）
      * @returns 获取转化平铺数据
      */
     getAllRowsData() {
@@ -168,24 +257,35 @@ export default class Database {
         recursiveData(this.data);
         return list;
     }
-    private filterColumns(columns: Column[]) {
-        return columns.reduce((acc: Column[], column) => {
-            // 检查当前列的 hide 属性
-            const shouldHide = typeof column.hide === 'function' ? column.hide() : column.hide;
-            // 如果当前列不应该隐藏，则添加到结果中
-            if (!shouldHide) {
-                const newColumn = { ...column }; // 复制当前列
-                // 递归处理子列
-                if (newColumn.children && Array.isArray(newColumn.children)) {
-                    newColumn.children = this.filterColumns(newColumn.children);
+    private generateColumns(columns: Column[]): Column[] {
+        const _generateColumns = (columns: Column[]): Column[] => {
+            return columns.map((column: Column) => {
+                const children =
+                    column.children && Array.isArray(column.children) ? _generateColumns(column.children) : undefined;
+                const dataMap = {
+                    hide: this.customHeader?.hideData?.[column.key],
+                    fixed: this.customHeader?.fixedData?.[column.key],
+                    sort: this.customHeader?.sortData?.[column.key],
+                    width: this.customHeader?.resizableData?.[column.key],
+                };
+                const obj: any = {};
+                for (const [key, value] of Object.entries(dataMap)) {
+                    if (value !== undefined) obj[key] = value;
                 }
-                acc.push(newColumn);
-            }
-            return acc;
-        }, []);
+                const allHide = children && children.every((item) => item.hide); // 所有子项都隐藏那父级也要隐藏
+                return {
+                    ...column,
+                    children,
+                    hide: allHide || (typeof column.hide === 'function' ? column.hide(column) : column.hide),
+                    ...obj,
+                };
+            });
+        };
+        return _generateColumns(columns);
     }
     getColumns() {
-        return this.filterColumns(this.columns);
+        const list = this.generateColumns(this.columns);
+        return list;
     }
     setColumns(columns: Column[]) {
         this.columns = columns;
@@ -193,9 +293,7 @@ export default class Database {
     }
     setData(data: any[]) {
         this.data = data;
-        if (this.columns.length) {
-            this.init();
-        }
+        this.init();
     }
     /**
      * 统一转化数据，给画body使用，包括过滤树状等，统一入口
@@ -217,14 +315,18 @@ export default class Database {
             data.forEach((item) => {
                 list.push(item);
                 const rowKey = this.itemRowKeyMap.get(item);
-                const { expand, hasChildren, height } = this.rowKeyMap.get(rowKey);
+                const { expand, hasChildren, height, calculatedHeight } = this.rowKeyMap.get(rowKey);
                 const top = this.sumHeight;
-                this.sumHeight += height;
+                // 计算行高度和设置高度取最大
+                const _height = Math.max(calculatedHeight, height);
+                this.sumHeight += _height;
                 this.rowIndexRowKeyMap.set(rowIndex, rowKey);
+                this.rowKeyRowIndexMap.set(rowKey, rowIndex);
                 this.positions.push({
                     top,
-                    height,
+                    height: _height,
                     bottom: this.sumHeight,
+                    calculatedHeight: calculatedHeight,
                 });
                 rowIndex += 1;
                 if (expand && hasChildren) {
@@ -233,9 +335,17 @@ export default class Database {
             });
         };
         this.rowIndexRowKeyMap.clear();
+        this.rowKeyRowIndexMap.clear();
         let _data = this.data;
         if (typeof this.filterMethod === 'function') {
             _data = this.filterMethod(_data);
+        }
+        // 说明需要排序
+        if (this.sortState.size) {
+            // 按时间戳排序，最早的先排序
+            const sortedEntries = Array.from(this.sortState.entries()).sort((a, b) => a[1].timestamp - b[1].timestamp);
+            // 对 sortedData 进行排序
+            _data = this.sortDataRecursive(_data, sortedEntries);
         }
         recursiveData(_data);
         this.bufferData = list;
@@ -264,6 +374,108 @@ export default class Database {
     clearFilterMethod() {
         this.filterMethod = undefined;
     }
+
+    /**
+     * 获取排序状态
+     */
+    getSortState(key: string) {
+        return this.sortState.get(key) || { direction: 'none' as const, timestamp: 0 };
+    }
+
+    /**
+     * 设置排序状态
+     */
+    setSortState(key: string, direction: 'asc' | 'desc' | 'none') {
+        const timestamp = Date.now();
+        if (this.ctx.config.SORT_STRICTLY) {
+            // 严格排序，清除所有排序状态
+            this.sortState.clear();
+        }
+        if (direction === 'none') {
+            // 清除排序状态
+            this.sortState.delete(key);
+        } else {
+            this.sortState.set(key, { direction, timestamp });
+        }
+        this.ctx.emit('sortChange', this.sortState);
+        this.clearBufferData();
+        this.ctx.emit('draw');
+    }
+
+    /**
+     * 清除所有排序状态
+     */
+    clearSort() {
+        this.sortState.clear();
+        this.ctx.emit('sortChange', this.sortState);
+        this.clearBufferData();
+        this.ctx.emit('draw');
+    }
+
+    /**
+     * 递归排序方法，支持树形数据
+     * @param data 要排序的数据
+     * @param sortedEntries 排序条目，按时间戳排序
+     * @returns 排序后的数据
+     */
+    private sortDataRecursive(
+        data: any[],
+        sortedEntries: [string, { direction: 'asc' | 'desc' | 'none'; timestamp: number }][],
+    ): any[] {
+        // 对当前层级进行排序
+        let sortedData = [...data];
+
+        // 逐层应用排序条件
+        for (const [key, { direction }] of sortedEntries) {
+            if (direction === 'none') continue;
+
+            const cellHeader = this.getColumnByKey(key);
+            if (!cellHeader || !cellHeader.column.sortBy) continue;
+
+            // 对当前层级进行单列排序
+            sortedData = this.applySingleColumnSort(sortedData, key, direction, cellHeader.column.sortBy);
+        }
+
+        // 递归处理子节点
+        return sortedData.map((item) => {
+            if (item.children && Array.isArray(item.children)) {
+                item.children = this.sortDataRecursive(item.children, sortedEntries);
+            }
+            return item;
+        });
+    }
+
+    /**
+     * 对数组进行单列排序
+     * @param data 要排序的数据
+     * @param key 排序的列键
+     * @param direction 排序方向
+     * @param sortBy 排序类型
+     * @returns 排序后的数据
+     */
+    private applySingleColumnSort(data: any[], key: string, direction: 'asc' | 'desc', sortBy: SortByType): any[] {
+        return data.sort((a, b) => {
+            const aValue = a[key];
+            const bValue = b[key];
+
+            let comparison = 0;
+
+            if (typeof sortBy === 'function') {
+                comparison = sortBy(a, b);
+            } else if (sortBy === 'number') {
+                const aNum = Number(aValue) || 0;
+                const bNum = Number(bValue) || 0;
+                comparison = aNum - bNum;
+            } else if (sortBy === 'string') {
+                const aStr = String(aValue || '');
+                const bStr = String(bValue || '');
+                comparison = aStr.localeCompare(bStr);
+            } else if (sortBy === 'date') {
+                comparison = compareDates(aValue, bValue);
+            }
+            return direction === 'asc' ? comparison : -comparison;
+        });
+    }
     /**
      * 根据rowKey,控制指定展开行
      * @param rowKey
@@ -272,12 +484,15 @@ export default class Database {
     expandItem(rowKey: string, expand = false) {
         const row = this.rowKeyMap.get(rowKey);
         row.expand = expand;
+        this.expandMap.set(rowKey, expand);
         this.clearBufferData(); // 清除缓存数据
         this.ctx.emit('draw');
     }
     setExpandRowKeys(rowKeys: any[], expand = true) {
+        this.expandMap.clear();
         rowKeys.forEach((rowkey) => {
             const row = this.rowKeyMap.get(rowkey);
+            this.expandMap.set(rowkey, expand);
             row.expand = expand;
         });
         this.clearBufferData(); // 清除缓存数据
@@ -293,8 +508,10 @@ export default class Database {
         return list;
     }
     expandAll(expand: boolean) {
+        this.expandMap.clear();
         this.rowKeyMap.forEach((row: any) => {
             row.expand = expand;
+            this.expandMap.set(row.key, expand);
         });
         this.clearBufferData(); // 清除缓存数据
         this.ctx.emit('draw');
@@ -308,6 +525,7 @@ export default class Database {
     setExpandChildren(rowKey: string, children: any[]) {
         const row = this.rowKeyMap.get(rowKey);
         row.expand = true;
+        this.expandMap.set(rowKey, true);
         row.expandLazy = true;
         row.item.children = children;
         this.initData(row.item.children, row.level + 1);
@@ -354,7 +572,7 @@ export default class Database {
         return this.itemRowKeyMap.get(item);
     }
     getRowIndexForRowKey(rowKey: string) {
-        return this.rowKeyMap.get(rowKey).index;
+        return this.rowKeyRowIndexMap.get(rowKey);
     }
     /**
      * 根据rowIndex和colIndex获取单元格数据
@@ -427,11 +645,17 @@ export default class Database {
      * @param history
      * @returns
      */
-    async batchSetItemValue(_list: ChangeItem[], history = false) {
+    async batchSetItemValue(
+        _list: ChangeItem[],
+        history = false,
+        checkReadonly = true,
+        historyAcion: HistoryAction = 'none',
+    ) {
         let historyList: HistoryItemData[] = [];
+        let _checkReadonly = checkReadonly;
         const rowKeyList: Set<string> = new Set();
         let errList: ChangeItem[] = [];
-        let changeList: BeforeChangeItem[] = _list.map((item) => {
+        let changeList: BeforeValueChangeItem[] = _list.map((item) => {
             const { rowKey, key } = item;
             let _value = item.value;
             let value = _value;
@@ -474,19 +698,24 @@ export default class Database {
             };
             this.ctx.emit('error', err);
         }
+        // 过滤旧数据新数据相同的
+        changeList = changeList.filter((item) => item.oldValue !== item.value);
         if (!changeList.length) {
             return;
         }
         const { BEFORE_VALUE_CHANGE_METHOD } = this.ctx.config;
-        if (typeof BEFORE_VALUE_CHANGE_METHOD === 'function') {
+        if (historyAcion === 'none' && typeof BEFORE_VALUE_CHANGE_METHOD === 'function') {
             const beforeCellValueChange: BeforeCellValueChangeMethod = BEFORE_VALUE_CHANGE_METHOD;
             const values = await beforeCellValueChange(changeList);
             changeList = values;
+            _checkReadonly = false; // 允许编辑只读
         }
         changeList.forEach((data) => {
-            const { value, rowKey, key, oldValue } = data;
+            const { value, rowKey, key } = data;
+            const oldValue = this.getItemValue(rowKey, key);
             rowKeyList.add(rowKey);
-            this.setItemValue(rowKey, key, value);
+            // 不加历史，不重绘，不是编辑器，不检验只读
+            this.setItemValue(rowKey, key, value, false, false, false, _checkReadonly);
             historyList.push({
                 rowKey,
                 key,
@@ -505,7 +734,14 @@ export default class Database {
                 this.ctx.emit('validateChangedData', this.getChangedData());
             }
         });
-        this.ctx.emit('change', changeList, rows);
+        const changeListValid = changeList.map((item) => {
+            const errorTip = !!this.getValidationError(item.rowKey, item.key).length;
+            return {
+                ...item,
+                errorTip,
+            };
+        });
+        this.ctx.emit('change', changeListValid, rows);
         // 推历史记录
         if (history) {
             this.ctx.history.pushState({
@@ -525,9 +761,18 @@ export default class Database {
      * @param history 是否添加历史记录
      * @param reDraw 是否刷新重绘
      * @param isEditor 是否是编辑器
+     * @param checkReadonly 是否检查只读
      * @returns
      */
-    async setItemValue(rowKey: string, key: string, _value: any, history = false, reDraw = false, isEditor = false) {
+    async setItemValue(
+        rowKey: string,
+        key: string,
+        _value: any,
+        history = false,
+        reDraw = false,
+        isEditor = false,
+        checkReadonly = true,
+    ) {
         // 异常情况
         if (!this.rowKeyMap.has(rowKey)) {
             return {};
@@ -538,7 +783,7 @@ export default class Database {
         let value = _value;
 
         // 只读返回旧值
-        if (this.ctx.database.getReadonly(rowKey, key)) {
+        if (checkReadonly && this.ctx.database.getReadonly(rowKey, key)) {
             return {
                 oldValue,
                 newValue: oldValue,
@@ -588,39 +833,16 @@ export default class Database {
                     newValue: oldValue,
                 };
             }
-            const { BEFORE_VALUE_CHANGE_METHOD } = this.ctx.config;
-            if (typeof BEFORE_VALUE_CHANGE_METHOD === 'function') {
-                const beforeCellValueChange: BeforeCellValueChangeMethod = BEFORE_VALUE_CHANGE_METHOD;
-                const values = await beforeCellValueChange([
-                    {
-                        rowKey,
-                        key,
-                        value,
-                        oldValue: item[key],
-                        row,
-                    },
-                ]);
-                if (values && values.length) {
-                    value = values[0].value;
-                }
-            }
-            // 设置改变值
-            this.changedDataMap.set(changeKey, value);
-            item[key] = value;
-            const changeItem: ChangeItem = {
-                rowKey,
-                key,
-                oldValue,
-                value,
-                row,
-            };
-            // 实时校验错误
-            this.getValidator(rowKey, key).then(() => {
-                if (this.validationErrorMap.size === 0 && this.changedDataMap.size > 0) {
-                    this.ctx.emit('validateChangedData', this.getChangedData());
-                }
-            });
-            this.ctx.emit('change', [changeItem], [row]);
+            let changeList: BeforeChangeItem[] = [
+                {
+                    rowKey,
+                    key,
+                    value,
+                    oldValue,
+                    row,
+                },
+            ];
+            this.batchSetItemValue(changeList, history, false);
             this.ctx.emit('editChange', {
                 rowKey,
                 key,
@@ -644,23 +866,6 @@ export default class Database {
                 row,
             });
         }
-        // 添加历史记录
-        if (history) {
-            this.ctx.history.pushState({
-                type: 'single',
-                scrollX: this.ctx.scrollX,
-                scrollY: this.ctx.scrollY,
-                changeList: [
-                    {
-                        rowKey,
-                        key,
-                        oldValue,
-                        newValue: value,
-                    },
-                ],
-            });
-        }
-
         // 重绘
         if (reDraw) {
             this.ctx.emit('draw');
@@ -710,20 +915,135 @@ export default class Database {
      * 根据rowKey 取反选中
      * @param rowKey
      */
-    toggleRowSelection(rowKey: string) {
+    toggleRowSelection(rowKey: string, cellType?: string) {
         const row = this.rowKeyMap.get(rowKey);
         const selection = this.selectionMap.get(rowKey);
         if (!selection) {
             return;
         }
-        selection.check = !selection.check;
-        this.setRowSelectionByCheckboxKey(rowKey, selection.check);
+
+        // 检查是否是树形选择列
+        if (cellType === 'selection-tree' || cellType === 'tree-selection') {
+            this.toggleTreeSelection(rowKey);
+        } else {
+            selection.check = !selection.check;
+            this.setRowSelectionByCheckboxKey(rowKey, selection.check);
+        }
+
         this.ctx.emit('toggleRowSelection', row);
         const rows = this.getSelectionRows();
         this.ctx.emit('selectionChange', rows);
         // 清除缓存
         this.bufferCheckState.buffer = false;
         this.ctx.emit('draw');
+    }
+
+    // 切换树形选择状态
+    toggleTreeSelection(rowKey: string) {
+        const treeState = this.getTreeSelectionState(rowKey);
+        const mode = this.ctx.config.TREE_SELECT_MODE;
+        if (mode === 'auto') {
+            // auto模式：子项全不选->父项不勾选，子项全选->父项勾选，子项都有->父项半选
+            // 父项选中的情况点击清空父项选择和所有子项选择，其他情况点击父项，勾选父项和所有子项选择（递归）
+            if (treeState.checked && !treeState.indeterminate) {
+                // 递归取消所有子项
+                this.clearTreeSelectionRecursive(rowKey);
+                // 如果已全选，则取消选中
+                this.setRowSelection(rowKey, false, false);
+            } else {
+                // 递归选中所有子项
+                this.selectTreeSelectionRecursive(rowKey);
+                // 如果未选中或半选，则选中
+                this.setRowSelection(rowKey, true, false);
+            }
+        } else if (mode === 'cautious') {
+            // cautious模式：交互上相同，但是半选是不算在数据里面的
+            if (treeState.checked && !treeState.indeterminate) {
+                // 递归取消所有子项
+                this.clearTreeSelectionRecursive(rowKey);
+                // 如果已全选，则取消选中
+                this.setRowSelection(rowKey, false, false);
+            } else {
+                // 递归选中所有子项
+                this.selectTreeSelectionRecursive(rowKey);
+                // 如果未选中或半选，则选中
+                this.setRowSelection(rowKey, true, false);
+            }
+        } else if (mode === 'strictly') {
+            // strictly模式：父子各选各的互相不干扰，没有半选模式
+            const selection = this.selectionMap.get(rowKey);
+            if (selection) {
+                selection.check = !selection.check;
+                this.setRowSelectionByCheckboxKey(rowKey, selection.check);
+            }
+        }
+
+        // 触发选择变化事件
+        this.ctx.emit('selectionChange', this.getSelectionRows());
+        this.ctx.emit('draw');
+    }
+
+    // 递归选中树形选择
+    private selectTreeSelectionRecursive(rowKey: string) {
+        const children = this.getTreeChildren(rowKey);
+        children.forEach((childKey) => {
+            this.setRowSelectionByParent(childKey, true);
+            this.selectTreeSelectionRecursive(childKey);
+        });
+    }
+
+    // 递归取消树形选择
+    private clearTreeSelectionRecursive(rowKey: string) {
+        const children = this.getTreeChildren(rowKey);
+        children.forEach((childKey) => {
+            this.setRowSelectionByParent(childKey, false);
+            this.clearTreeSelectionRecursive(childKey);
+        });
+    }
+
+    // 向上递归更新父项状态
+    private updateParentTreeSelection(rowKey: string) {
+        const parentKey = this.getTreeParent(rowKey);
+        if (!parentKey) {
+            return;
+        }
+
+        // 获取父项的所有直接子项
+        const children = this.getTreeChildren(parentKey);
+        const childSelections = children.map((childKey) => this.selectionMap.get(childKey));
+        const checkedChildren = childSelections.filter((s) => s?.check).length;
+        const totalChildren = childSelections.length;
+
+        // 计算父项应该的状态
+        let parentShouldBeChecked = false;
+        if (totalChildren > 0) {
+            if (checkedChildren === 0) {
+                // 所有子项都未选中，父项应该未选中
+                parentShouldBeChecked = false;
+            } else if (checkedChildren === totalChildren) {
+                // 所有子项都选中，父项应该选中
+                parentShouldBeChecked = true;
+            } else {
+                // 部分子项选中，父项应该半选
+                if (this.ctx.config.TREE_SELECT_MODE === 'auto') {
+                    // auto模式下半选算作选中
+                    parentShouldBeChecked = true;
+                } else if (this.ctx.config.TREE_SELECT_MODE === 'cautious') {
+                    // cautious模式下半选不算作选中
+                    parentShouldBeChecked = false;
+                }
+            }
+        }
+
+        // 更新父项状态
+        const parentSelection = this.selectionMap.get(parentKey);
+        if (parentSelection && parentSelection.check !== parentShouldBeChecked) {
+            parentSelection.check = parentShouldBeChecked;
+            this.setRowSelectionByCheckboxKey(parentKey, parentShouldBeChecked);
+
+            // 递归更新更上层的父项
+            this.updateParentTreeSelection(parentKey);
+        }
     }
     /**
      * 根据rowKey 设置选中状态
@@ -737,11 +1057,25 @@ export default class Database {
         selection.check = check;
         this.setRowSelectionByCheckboxKey(rowKey, selection.check);
         this.ctx.emit('setRowSelection', check, selection.row);
+
+        // 如果是树形选择模式，需要向上递归更新父项状态
+        if (this.ctx.config.TREE_SELECT_MODE === 'auto' || this.ctx.config.TREE_SELECT_MODE === 'cautious') {
+            this.updateParentTreeSelection(rowKey);
+        }
+
         if (draw) {
             // 清除缓存
             this.bufferCheckState.buffer = false;
             this.ctx.emit('draw');
         }
+    }
+    setRowSelectionByParent(rowKey: string, check: boolean) {
+        const selection = this.selectionMap.get(rowKey);
+        if (!selection) {
+            return;
+        }
+        selection.check = check;
+        this.setRowSelectionByCheckboxKey(rowKey, selection.check);
     }
     getSelectionRows() {
         let rows: any[] = [];
@@ -763,6 +1097,141 @@ export default class Database {
         }
         return selection.check;
     }
+
+    // 获取树形选择状态
+    getTreeSelectionState(rowKey: string) {
+        const row = this.getRowForRowKey(rowKey);
+        if (!row) {
+            return { checked: false, indeterminate: false };
+        }
+
+        const selectionMap = this.selectionMap.get(rowKey);
+        const checked = selectionMap?.check || false;
+
+        // 计算半选状态
+        const children = this.getTreeChildren(rowKey);
+        if (children.length === 0) {
+            return { checked, indeterminate: false };
+        }
+
+        let indeterminate = false;
+        let finalChecked = checked;
+
+        if (this.ctx.config.TREE_SELECT_MODE === 'auto') {
+            // auto模式：子项全不选->父项不勾选，子项全选->父项勾选，子项都有->父项半选
+            // 其中半选是算在最终选择的数据里面的
+
+            // 递归计算所有后代的状态
+            const getAllDescendantsRecursive = (parentKey: string): string[] => {
+                const children = this.getTreeChildren(parentKey);
+                let allDescendants: string[] = [];
+                for (const childKey of children) {
+                    allDescendants.push(childKey);
+                    allDescendants.push(...getAllDescendantsRecursive(childKey));
+                }
+                return allDescendants;
+            };
+
+            const allDescendants = getAllDescendantsRecursive(rowKey);
+            const descendantSelections = allDescendants.map((descKey) => this.selectionMap.get(descKey));
+            const checkedDescendants = descendantSelections.filter((s) => s?.check).length;
+            const totalDescendants = descendantSelections.length;
+
+            const someChecked = checkedDescendants > 0;
+            const allChecked = checkedDescendants === totalDescendants;
+            indeterminate = someChecked && !allChecked;
+            finalChecked = checked || someChecked; // 自身选中或有后代选中就算选中（包括半选）
+
+            // 特殊处理：如果父项被选中但所有后代都被取消选中，则父项也取消选中
+            if (checked && totalDescendants > 0 && checkedDescendants === 0) {
+                finalChecked = false;
+                indeterminate = false;
+            }
+        } else if (this.ctx.config.TREE_SELECT_MODE === 'cautious') {
+            // cautious模式：交互上相同，但是半选是不算在数据里面的
+            // 递归计算所有后代的状态
+            const getAllDescendantsRecursive = (parentKey: string): string[] => {
+                const children = this.getTreeChildren(parentKey);
+                let allDescendants: string[] = [];
+                for (const childKey of children) {
+                    allDescendants.push(childKey);
+                    allDescendants.push(...getAllDescendantsRecursive(childKey));
+                }
+                return allDescendants;
+            };
+
+            const allDescendants = getAllDescendantsRecursive(rowKey);
+            const descendantSelections = allDescendants.map((descKey) => this.selectionMap.get(descKey));
+            const checkedDescendants = descendantSelections.filter((s) => s?.check).length;
+            const totalDescendants = descendantSelections.length;
+
+            const someChecked = checkedDescendants > 0;
+            const allChecked = checkedDescendants === totalDescendants;
+            indeterminate = someChecked && !allChecked;
+            finalChecked = checked || allChecked; // 只有全选才算选中，半选不算选中
+
+            // 特殊处理：如果父项被选中但所有后代都被取消选中，则父项也取消选中
+            if (checked && totalDescendants > 0 && checkedDescendants === 0) {
+                finalChecked = false;
+                indeterminate = false;
+            }
+        } else if (this.ctx.config.TREE_SELECT_MODE === 'strictly') {
+            // strictly模式：父子各选各的互相不干扰，没有半选模式
+            indeterminate = false;
+            finalChecked = checked;
+        }
+
+        const result = { checked: finalChecked, indeterminate };
+        return result;
+    }
+
+    // 获取树形子节点
+    getTreeChildren(rowKey: string): string[] {
+        const row = this.getRowForRowKey(rowKey);
+        if (!row || !row.item || !row.item.children) {
+            return [];
+        }
+
+        const children: string[] = [];
+        const collectChildren = (items: any[]) => {
+            for (const item of items) {
+                const itemKey = this.getRowKeyByItem(item);
+                if (itemKey) {
+                    children.push(itemKey);
+                }
+                if (item.children && item.children.length > 0) {
+                    collectChildren(item.children);
+                }
+            }
+        };
+
+        collectChildren(row.item.children);
+        return children;
+    }
+
+    // 获取树形父节点
+    getTreeParent(rowKey: string): string | null {
+        const findParent = (data: any[], targetKey: string): string | null => {
+            for (const item of data) {
+                const itemKey = this.getRowKeyByItem(item);
+                if (item.children) {
+                    for (const child of item.children) {
+                        const childKey = this.getRowKeyByItem(child);
+                        if (childKey === targetKey) {
+                            return itemKey;
+                        }
+                        const result = findParent(item.children, targetKey);
+                        if (result) {
+                            return result;
+                        }
+                    }
+                }
+            }
+            return null;
+        };
+
+        return findParent(this.data, rowKey);
+    }
     /**
      * 根据rowKey 获取选中状态
      * @param rowKey
@@ -782,18 +1251,45 @@ export default class Database {
      * @param rowKey
      */
     toggleAllSelection() {
-        this.rowKeyMap.forEach((row: any, rowKey: string) => {
-            let _selectable = row.selectable;
-            if (typeof _selectable === 'function') {
-                _selectable = _selectable({
-                    row: row.item,
-                    rowIndex: row.rowIndex,
-                });
-            }
-            if (_selectable) {
-                this.setRowSelection(rowKey, true, false);
-            }
-        });
+        // 检查是否是树形选择模式
+        const isTreeSelectionMode =
+            this.ctx.config.TREE_SELECT_MODE === 'auto' || this.ctx.config.TREE_SELECT_MODE === 'cautious';
+
+        if (isTreeSelectionMode) {
+            // 树形选择模式：只从上到下设置，跳过递归计算
+            this.rowKeyMap.forEach((row: any, rowKey: string) => {
+                let _selectable = row.selectable;
+                if (typeof _selectable === 'function') {
+                    _selectable = _selectable({
+                        row: row.item,
+                        rowIndex: row.rowIndex,
+                    });
+                }
+                if (_selectable) {
+                    // 直接设置选中状态，跳过递归计算
+                    const selection = this.selectionMap.get(rowKey);
+                    if (selection) {
+                        selection.check = true;
+                        this.setRowSelectionByCheckboxKey(rowKey, true);
+                    }
+                }
+            });
+        } else {
+            // 普通选择模式：使用原有逻辑
+            this.rowKeyMap.forEach((row: any, rowKey: string) => {
+                let _selectable = row.selectable;
+                if (typeof _selectable === 'function') {
+                    _selectable = _selectable({
+                        row: row.item,
+                        rowIndex: row.rowIndex,
+                    });
+                }
+                if (_selectable) {
+                    this.setRowSelection(rowKey, true, false);
+                }
+            });
+        }
+
         const rows = this.getSelectionRows();
         this.ctx.emit('toggleAllSelection', rows);
         this.ctx.emit('selectionChange', rows);
@@ -806,14 +1302,35 @@ export default class Database {
      * @param rowKey
      */
     clearSelection(ignoreReserve = false) {
+        // 检查是否是树形选择模式
+        const isTreeSelectionMode =
+            this.ctx.config.TREE_SELECT_MODE === 'auto' || this.ctx.config.TREE_SELECT_MODE === 'cautious';
+
         // 清除选中,点击表头清除时要忽略跨页选的
         if (ignoreReserve) {
-            this.rowKeyMap.forEach((_, rowKey: string) => {
-                this.setRowSelection(rowKey, false, false);
-            });
+            if (isTreeSelectionMode) {
+                // 树形选择模式：只从上到下设置，跳过递归计算
+                this.rowKeyMap.forEach((_, rowKey: string) => {
+                    const selection = this.selectionMap.get(rowKey);
+                    if (selection) {
+                        selection.check = false;
+                        this.setRowSelectionByCheckboxKey(rowKey, false);
+                    }
+                });
+            } else {
+                // 普通选择模式：使用原有逻辑
+                this.rowKeyMap.forEach((_, rowKey: string) => {
+                    this.setRowSelection(rowKey, false, false);
+                });
+            }
         } else {
-            this.selectionMap.forEach((_, rowKey: string) => {
-                this.setRowSelection(rowKey, false, false);
+            this.selectionMap.clear();
+            this.rowKeyMap.forEach((row, rowKey: string) => {
+                this.selectionMap.set(rowKey, {
+                    check: false,
+                    row: row.item,
+                    key: rowKey,
+                });
             });
         }
         const rows = this.getSelectionRows();
@@ -972,6 +1489,7 @@ export default class Database {
             height: 0,
             top: 0,
             bottom: 0,
+            calculatedHeight: 0,
         };
     }
 
@@ -982,6 +1500,7 @@ export default class Database {
         this.headerMap.set(key, cellHeader);
         return true;
     }
+
     getReadonly(rowKey: string, key: string) {
         const { DISABLED } = this.ctx.config;
         // 禁用编辑
@@ -1023,7 +1542,7 @@ export default class Database {
             const row = this.rowKeyMap.get(rowKey);
             const colHeader = this.headerMap.get(key);
             const { BODY_CELL_RULES_METHOD } = this.ctx.config;
-            if (colHeader === undefined) {
+            if (row === undefined || colHeader === undefined) {
                 return resolve([]);
             }
             const column = colHeader.column;
@@ -1043,49 +1562,23 @@ export default class Database {
                 }
             }
             if (rules) {
-                let descriptor: Descriptor = {};
-                let data: any = {};
-                data[key] = this.getItemValue(rowKey, key);
-                if (Array.isArray(rules)) {
-                    const _rules = rules.map((item) => {
-                        return {
-                            ...item,
-                            row: row.item,
-                            column,
-                            rowIndex: row.rowIndex,
-                            colIndex: colHeader.colIndex,
-                        };
-                    });
-                    descriptor[key] = _rules;
-                } else {
-                    descriptor[key] = {
-                        ...rules,
-                        row: row.item,
-                        column,
-                        rowIndex: row.rowIndex,
-                        colIndex: colHeader.colIndex,
-                    };
-                }
-
-                const validator = new Schema(descriptor);
-                validator
-                    .validate(data)
-                    .then(() => {
-                        this.clearValidationError(rowKey, key);
-                        resolve([]);
-                    })
-                    .catch(({ errors }) => {
-                        const _errors = errors.map((error: any) => ({
-                            ...error,
-                            column,
-                            key,
-                            row: row.item,
-                            rowKey,
-                        }));
-                        this.setValidationError(rowKey, key, _errors);
-                        resolve(_errors);
-                    });
+                const ruleParam: RuleParam = {
+                    row: row.item,
+                    rowIndex: row.rowIndex,
+                    colIndex: colHeader.colIndex,
+                    column,
+                    key,
+                    rowKey,
+                    value: this.getItemValue(rowKey, key),
+                    field: key,
+                    fieldValue: this.getItemValue(rowKey, key),
+                };
+                const validator = new Validator(rules);
+                const _errors = validator.validate(ruleParam);
+                this.setValidationError(rowKey, key, _errors);
+                resolve(_errors);
             } else {
+                this.clearValidationError(rowKey, key);
                 resolve([]);
             }
         });
@@ -1269,24 +1762,32 @@ export default class Database {
             dataList,
         };
     }
-    setLoading(loading: boolean) {
-        this.loading = loading;
-        this.ctx.emit('loadingChange', loading);
-    }
-    getLoading() {
-        return this.loading;
-    }
-    setValidationErrorByRowIndex(rowIndex: number, key: string, message: string) {
-        const rowKey = this.rowIndexRowKeyMap.get(rowIndex);
+    setValidationErrorByRowKey(rowKey: string, key: string, message: string) {
         const _key = `${rowKey}\u200b_${key}`;
-        const errors: ValidateError[] = [
+        const row = this.getRowForRowKey(rowKey);
+        const rowIndex = row?.rowIndex;
+        const cellHeader = this.getColumnByKey(key);
+        if (!rowKey || !cellHeader || !row) {
+            return;
+        }
+        const value = this.getItemValue(rowKey, key);
+        const errors: ValidateResult = [
             {
+                key,
+                rowKey,
+                rowIndex,
+                colIndex: cellHeader.colIndex,
+                column: cellHeader.column,
+                row,
+                value,
                 message,
+                field: key,
+                fieldValue: value,
             },
         ];
         this.validationErrorMap.set(_key, errors);
     }
-    setValidationError(rowKey: string, key: string, errors: any[]) {
+    setValidationError(rowKey: string, key: string, errors: ValidateResult) {
         const _key = `${rowKey}\u200b_${key}`;
         this.validationErrorMap.set(_key, errors);
     }
@@ -1300,14 +1801,14 @@ export default class Database {
         const _key = `${rowKey}\u200b_${key}`;
         return this.validationErrorMap.get(_key) || [];
     }
-    // 获取虚拟单元格
-    getVirtualBodyCell(rowIndex: number, colIndex: number) {
+    // 获取虚拟单元格,只针对可见的
+    getVirtualBodyCell(rowIndex: number, colIndex: number, isUpdate = true) {
         const column = this.getColumnByColIndex(colIndex);
         const row = this.getRowForRowIndex(rowIndex);
         if (!column || !row) {
             return;
         }
-        const cell = new Cell(this.ctx, rowIndex, colIndex, 0, 0, 0, 0, column, row.item, 'body');
+        const cell = new Cell(this.ctx, rowIndex, colIndex, 0, 0, 0, 0, column, row.item, 'body', isUpdate);
         return cell;
     }
     getVirtualBodyCellByKey(rowKey: string, key: string) {
@@ -1330,5 +1831,125 @@ export default class Database {
             }
         }
         return hasMergeCell;
+    }
+    /**
+     * 计算树形数据的最大深度
+     * @param data 树形数据
+     * @param currentDepth 当前深度
+     * @returns 最大深度
+     */
+    private calculateMaxTreeDepth(data: any[], currentDepth: number = 0): number {
+        let maxDepth = currentDepth;
+
+        data.forEach((item) => {
+            if (Array.isArray(item.children) && item.children.length > 0) {
+                const childMaxDepth = this.calculateMaxTreeDepth(item.children, currentDepth + 1);
+                maxDepth = Math.max(maxDepth, childMaxDepth);
+            }
+        });
+
+        return maxDepth;
+    }
+    setOverlayerAutoHeightMap(map: Map<string, number>) {
+        this.overlayerAutoHeightMap = map;
+    }
+    getOverlayerAutoHeightMap() {
+        return this.overlayerAutoHeightMap;
+    }
+    getOverlayerAutoHeight(rowIndex: number, colIndex: number) {
+        const key = `${rowIndex}\u200b_${colIndex}`;
+        const height = this.overlayerAutoHeightMap.get(key) || 0;
+        return height;
+    }
+    setCustomHeader(customHeader: CustomHeader, ignoreEmit = false) {
+        (['fixedData', 'sortData', 'hideData', 'resizableData'] as (keyof CustomHeader)[]).forEach((key) => {
+            const value = customHeader[key];
+            if (value !== undefined) {
+                this.customHeader[key] = value as any;
+            }
+        });
+        if (!ignoreEmit) {
+            const obj = this.clearCustomHeaderInvalidValues(this.columns);
+            this.ctx.emit('customHeaderChange', obj);
+        }
+    }
+    resetCustomHeader() {
+        this.customHeader = {};
+        this.ctx.emit('resetHeader');
+        this.ctx.emit('customHeaderChange', this.customHeader);
+    }
+    getCustomHeader() {
+        return this.customHeader;
+    }
+    setCustomHeaderResizableData(key: string, width: number) {
+        // 统一设置方法
+        let { resizableData = {} } = this.customHeader;
+        resizableData[key] = width;
+        this.setCustomHeader({
+            resizableData,
+        });
+    }
+    setCustomHeaderHideData(keys: string[], hide: boolean) {
+        let { hideData = {} } = this.customHeader;
+        keys.forEach((key) => {
+            hideData[key] = hide;
+        });
+        this.setCustomHeader({
+            hideData,
+        });
+        this.ctx.emit('resetHeader');
+    }
+    setCustomHeaderFixedData(keys: string[], fixed: Fixed | '') {
+        let { fixedData = {} } = this.customHeader;
+        keys.forEach((key) => {
+            fixedData[key] = fixed;
+        });
+        this.setCustomHeader({
+            fixedData,
+        });
+        this.ctx.emit('resetHeader');
+    }
+    // 递归处理
+    clearCustomHeaderInvalidValues(columns: Column[]) {
+        const clearCustomHeaderInvalidValues = (columns: Column[], customHeader: CustomHeader = {}) => {
+            columns.forEach((column) => {
+                if (column.children && column.children.length > 0) {
+                    clearCustomHeaderInvalidValues(column.children, customHeader);
+                }
+                // 用一个小的 helper 函数，减少重复代码
+                const assignIfDifferent = (field: keyof CustomHeader, columnValue: any) => {
+                    const value = this.customHeader[field]?.[column.key];
+                    if (value !== undefined && value !== columnValue) {
+                        if (!customHeader[field]) {
+                            customHeader[field] = {} as any;
+                        }
+                        (customHeader[field] as any)[column.key] = value;
+                        // 如果固定源数据为空，则删除
+                        if (field === 'fixedData' && !value && !columnValue) {
+                            delete customHeader[field]?.[column.key];
+                        }
+                    }
+                };
+                assignIfDifferent('fixedData', column.fixed);
+                assignIfDifferent('sortData', column.sort);
+                assignIfDifferent('hideData', column.hide);
+                assignIfDifferent('resizableData', column.width);
+            });
+        };
+        let obj: CustomHeader = {};
+        clearCustomHeaderInvalidValues(columns, obj);
+        return obj;
+    }
+    setMaxRowHeightItem(rowKey: string, key: string, height: number) {
+        this.maxRowHeightCellMap.set(rowKey, {
+            key,
+            height,
+        });
+    }
+    getMaxRowHeightItem(rowKey: string) {
+        return this.maxRowHeightCellMap.get(rowKey);
+    }
+    clearChangeData() {
+        this.changedDataMap.clear();
     }
 }

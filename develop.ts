@@ -1,5 +1,13 @@
 import EVirtTable from './src/EVirtTable';
-import { BeforeCopyParams, BeforeSetSelectorParams, Column, PastedDataOverflow, SelectableParams } from './src/types';
+import {
+    BeforeChangeItem,
+    BeforeCopyParams,
+    BeforeSetSelectorParams,
+    BeforeValueChangeItem,
+    Column,
+    PastedDataOverflow,
+    SelectableParams,
+} from './src/types';
 // import { mergeColCell, mergeRowCell } from './src/util';
 
 const canvas = document.getElementById('e-virt-table') as HTMLDivElement;
@@ -12,11 +20,12 @@ let columns: Column[] = [
     //   width: 50,
     // },
     {
-        title: '',
         key: 'selection',
         type: 'selection',
         fixed: 'left',
-        width: 50,
+        title: '',
+        align: 'center',
+        maxWidth: 60,
         operation: true,
         widthFillDisable: true,
     },
@@ -25,6 +34,8 @@ let columns: Column[] = [
         width: 100,
         title: 'ID',
         fixed: 'left',
+        minWidth: 80,
+        maxWidth: 200,
     },
     // {
     //   key: "selection",
@@ -35,41 +46,38 @@ let columns: Column[] = [
     {
         title: '工号',
         key: 'emp_no',
+        align: 'left',
         // operation: true,
-        readonly: true,
+        readonly: false,
+        width: 120,
         type: 'tree',
-        fixed: 'left',
-        sort: 4,
+        fixed: 'right',
         // hide: () => 3 > 2,
     },
     {
         title: '姓名',
         key: 'emp_name',
         width: 100,
-        sort: 7,
         fixed: 'left',
         align: 'left',
+
         hoverIconName: 'icon-edit',
         placeholder: '请输入',
+        // maxLineClamp: 3,
         // editorType: 'none',
         verticalAlign: 'middle',
         // hide: true,
-        // render: (pEl, cell) => {
-        //     const cellEl = document.createElement('div');
-        //     cellEl.addEventListener('click', () => {
-        //         console.log('点击了姓名');
-        //     });
-        //     cellEl.style.width = '100%';
-        //     cellEl.style.height = '100%';
-        //     cellEl.style.opacity = '0.5';
-        //     cellEl.style.backgroundColor = 'cyan';
-        //     cellEl.style.display = 'flex';
-        //     cellEl.style.justifyContent = 'center';
-        //     cellEl.style.alignItems = 'center';
+        render: (pEl, cell) => {
+            const cellEl = document.createElement('div');
+            cellEl.addEventListener('click', () => {
+                console.log('点击了姓名');
+            });
+            cellEl.style.opacity = '0.5';
+            cellEl.style.backgroundColor = 'cyan';
 
-        //     cellEl.innerHTML = cell.text;
-        //     pEl.appendChild(cellEl);
-        // },
+            cellEl.innerHTML = cell.text;
+            pEl.appendChild(cellEl);
+        },
         // render: "emp_name",
     },
     // {
@@ -104,19 +112,41 @@ let columns: Column[] = [
                     {
                         title: '姓名11',
                         key: 'emp_name11',
+                        // verticalAlign: 'middle',
                         readonly: false,
                         width: 200,
+                        maxLineClamp: 2,
                         rules: {
-                            validator(rule: any, value: any, callback: any) {
-                                if (!value) {
-                                    callback('请输入岗位');
-                                } else if (value.length > 10) {
-                                    callback('岗位字段长度必须小于10个字符哦！');
-                                } else {
-                                    callback();
-                                }
-                            },
+                            required: true,
+                            message: '该项必填哦！',
+                            // validator(rule, value, callback) {
+                            //     if (!value) {
+                            //         callback('请输入岗位');
+                            //     } else if (value.length > 10) {
+                            //         callback('岗位字段长度必须小于10个字符哦！');
+                            //     } else {
+                            //         callback();
+                            //     }
+                            // },
                         },
+                        children: [
+                            {
+                                title: '姓名111',
+                                key: 'emp_name111',
+                                align: 'left',
+                                width: 200,
+                            },
+                            {
+                                title: '姓名112',
+                                key: 'emp_name112',
+                                // hide: true,
+                            },
+                            {
+                                title: '姓名113',
+                                key: 'emp_name113',
+                                // hideDisabled: true,
+                            },
+                        ],
                     },
                     {
                         title: '姓名22',
@@ -131,6 +161,12 @@ let columns: Column[] = [
                             {
                                 title: '姓名222',
                                 key: 'emp_name222',
+                                // hide: true,
+                            },
+                            {
+                                title: '姓名223',
+                                key: 'emp_name223',
+                                // hideDisabled: true,
                             },
                         ],
                     },
@@ -145,41 +181,62 @@ let columns: Column[] = [
     {
         title: '手机号',
         key: 'phone',
-        fixed: 'right',
-        readonly: false,
-        formatterFooter: ({ value }) => {
-            return `合：${value}`;
-        },
+        maxLineClamp: 'auto',
+        sortBy: 'string',
+        align: 'left',
+        verticalAlign: 'bottom',
+        // fixed: 'right',
+        // readonly: false,
+        // overflowTooltipHeaderShow: true,
+        // formatterFooter: ({ value }) => {
+        //     return `合：${value}`;
+        // },
         width: 100,
     },
     {
         title: '性别',
         key: 'sex',
         // readonly: false,
-        fixed: 'right',
         // render: "sex",
-        rules: [
-            {
-                validator: (rule, value, callback) => {
-                    if (!value) {
-                        callback('该项必填哦！');
-                    } else {
-                        callback();
-                    }
-                },
-            },
-        ],
+        // rules: [
+        //     {
+        //         validator: (rule, value, callback) => {
+        //             if (!value) {
+        //                 callback('该项必填哦！');
+        //             } else {
+        //                 callback();
+        //             }
+        //         },
+        //     },
+        // ],
         renderHeader: (pEl, cell) => {
             const cellEl = document.createElement('div');
             cellEl.style.width = '100%';
             cellEl.style.height = '100%';
             cellEl.style.opacity = '0.5';
-            cellEl.style.backgroundColor = 'cyan';
+            // cellEl.style.backgroundColor = 'cyan';
             cellEl.style.display = 'flex';
             cellEl.style.justifyContent = 'center';
             cellEl.style.alignItems = 'center';
-
+            cellEl.style.userSelect = 'text';
             cellEl.innerHTML = cell.text;
+            pEl.appendChild(cellEl);
+        },
+        render: (pEl, cell) => {
+            const cellEl = document.createElement('div');
+            cellEl.style.width = '100%';
+            cellEl.style.opacity = '0.5';
+            cellEl.style.backgroundColor = 'cyan';
+            cellEl.style.display = 'block';
+            // cellEl.style.justifyContent = 'center';
+            // cellEl.style.alignItems = 'center';
+            cellEl.style.whiteSpace = 'pre-line';
+            cellEl.style.userSelect = 'text';
+            cellEl.innerHTML = cell.text;
+            cellEl.className = 'evt-body-cell-auto-height';
+            cellEl.dataset.rowIndex = cell.rowIndex;
+            cellEl.dataset.visibleWidth = cell.visibleWidth;
+            cellEl.dataset.visibleHeight = cell.visibleHeight;
             pEl.appendChild(cellEl);
         },
     },
@@ -200,32 +257,46 @@ let columns: Column[] = [
         sort: 2,
     },
     {
+        title: '工作地址',
+        key: 'work_address',
+        formatter: ({ value }) => {
+            return `工作11地址：${value}`;
+        },
+    },
+    {
         title: '家庭地址',
         key: 'address',
+        headerAlign: 'center',
         align: 'left',
+        readonly: false,
         width: 250,
-        fixed: 'right',
-        overflowTooltipShow: true,
+        // overflowTooltipShow: false,
         overflowTooltipMaxWidth: 200,
         overflowTooltipPlacement: 'top',
-        rules: {
-            required: true,
-            message: '该项必填哦！',
-        },
+        // readonly: false,
+        // rules: {
+        //     required: true,
+        //     message: '该项必填哦！',
+        // },
         render: (pEl, cell) => {
             const cellEl = document.createElement('div');
+            // 添加事件
             cellEl.addEventListener('click', () => {
                 console.log('点击了家庭地址');
             });
-            cellEl.style.width = '100%';
-            cellEl.style.height = '100%';
+            cellEl.style.minHeight = '36px';
             cellEl.style.opacity = '0.5';
-            cellEl.style.backgroundColor = 'cyan';
+            // cellEl.style.backgroundColor = 'cyan';
+            cellEl.style.flex = 'none';
             cellEl.style.display = 'block';
+            cellEl.style.padding = '8px';
             // cellEl.style.justifyContent = 'center';
             // cellEl.style.alignItems = 'center';
-            cellEl.style.whiteSpace = 'pre-line';
-            cellEl.innerHTML = cell.text;
+            // cellEl.style.whiteSpace = 'pre-line';
+            cellEl.style.userSelect = 'text';
+            // cellEl.style.border = '1px solid red';
+            cellEl.style.overflowWrap = 'break-word';
+            cellEl.innerHTML = cell.value || ''; // 设置单元格内容
             pEl.appendChild(cellEl);
         },
     },
@@ -237,17 +308,32 @@ let columns: Column[] = [
         title: '物料编码',
         key: 'materialNo',
         align: 'right',
+        selectorCellValueType: 'displayText', // displayText | value
         formatter({ value }: { value: string }) {
             if (!value) {
                 return '';
             }
             const v = parseFloat(value);
-            return v.toFixed(2);
+            return `物料编码：${v}`;
         },
     },
     {
         title: '数量',
         key: 'requiredQuantity',
+        rules: [
+            {
+                required: true, // TODO:表格1.2.19有问题
+                pattern: /^(0|[1-9]\d*)$/,
+                message: '请输入0或正整数',
+                validator(rule, value, callback) {
+                    if (value > 10) {
+                        callback('数量不能大于10');
+                    } else {
+                        callback();
+                    }
+                },
+            },
+        ],
         align: 'right',
     },
     { title: '单位', key: 'unit' },
@@ -256,7 +342,7 @@ let columns: Column[] = [
     { title: '户籍城市', key: 'household_city' },
     { title: '户籍地址', key: 'household_address' },
     { title: '民族', key: 'nation' },
-    { title: '工作地址', key: 'work_address' },
+    // { title: '工作地址', key: 'work_address' },
     {
         title: '工作邮箱',
         key: 'work_email',
@@ -281,12 +367,19 @@ let columns: Column[] = [
         title: '采购价(元)',
         key: 'purchasePrice',
         fixed: 'right',
-        type: 'number',
+        required: true,
+        align: 'right',
+        // type: 'number',
         rules: [
             {
                 required: true,
-                type: 'number',
+                message: '请输入',
+            },
+            {
+                // required: false,
                 message: '请输入销售价',
+                // 只能输入数字或小数点，且小数点后最多两位
+                pattern: /^(\d+(\.\d{1,2})?|\.?\d{1,2})$/,
             },
         ],
     },
@@ -299,13 +392,13 @@ let columns: Column[] = [
         hoverIconName: 'icon-edit',
         placeholder: '请输入',
         // readonly: true,
-        rules: [
-            {
-                required: true,
-                type: 'number',
-                message: '请输入销售价',
-            },
-        ],
+        // rules: [
+        //     {
+        //         required: true,
+        //         type: 'number',
+        //         message: '请输入销售价',
+        //     },
+        // ],
     },
     {
         title: '操作',
@@ -314,7 +407,7 @@ let columns: Column[] = [
     },
 ];
 let data: any[] = [];
-for (let i = 0; i < 100; i += 1) {
+for (let i = 0; i < 5000; i += 1) {
     data.push({
         _height: [3, 5, 6, 7].includes(i) ? 60 : 0,
         id: `1_${i}`,
@@ -332,7 +425,11 @@ for (let i = 0; i < 100; i += 1) {
         sex: i % 4 === 0 ? 1 : i === 3 ? null : 2,
         address:
             // eslint-disable-next-line no-nested-ternary
-            i === 1 ? `海淀区北京路海淀区北京路十分地${i}号` : i === 4 ? '' : `海淀区北京路${i}号`,
+            i === 1
+                ? `海淀区北京路海淀区北京路十分地海淀区北京路海淀区北京路十分地海淀区北京路海淀区北京路十分地${i}号`
+                : i === 4
+                ? '海淀区北京路海淀区北京路十分地海淀区北京路海淀区北京路十分地海淀区北京路海淀区北京路十分地海淀区北京路海淀区北京路十分地海淀区北京路海淀区北京路十分地海淀区北京路海淀区北京路十分地海淀区北京路海淀区北京路十分地海淀区北京路海淀区北京路十分地'
+                : `海淀区北京路${i}号`,
         work_type: `兼职${i}`,
         work_status: `在职${i}`,
         household_city: `深圳${i}`,
@@ -357,7 +454,46 @@ for (let i = 0; i < 100; i += 1) {
         customerRemarks: `测试测试${i}`,
         purchasePrice: 10.2 + i,
         salePrice: 12.3 + i,
-        children: [],
+        children: [
+            {
+                id: `${i}-1`,
+                emp_no: `${i}-1`,
+                emp_name: `张三${i}-1`,
+                children: [],
+            },
+            {
+                id: `${i}-2`,
+                emp_no: `${i}-2`,
+                emp_name: `张三${i}-2`,
+                children: [
+                    {
+                        id: `${i}-2-1`,
+                        emp_no: `${i}-2-1`,
+                        emp_name: `张三${i}-2-1`,
+                        children: [],
+                    },
+                    {
+                        id: `${i}-2-2`,
+                        emp_no: `${i}-2-2`,
+                        emp_name: `张三${i}-2-2`,
+                        children: [
+                            {
+                                id: `${i}-2-2-1`,
+                                emp_no: `${i}-2-2-1`,
+                                emp_name: `张三${i}-2-2-1`,
+                                children: [],
+                            },
+                        ],
+                    },
+                    {
+                        id: `${i}-2-3`,
+                        emp_no: `${i}-2-3`,
+                        emp_name: `张三${i}-2-3`,
+                        children: [],
+                    },
+                ],
+            },
+        ],
         _hasChildren: true,
     });
 }
@@ -393,13 +529,16 @@ const eVirtTable = new EVirtTable(canvas, {
         ICONS: [],
         BORDER: true,
         STRIPE: false,
+        TREE_LINE: true,
         // DISABLED: true,
         // HEIGHT: 500,
         // CHECKBOX_KEY: 'emp_name',
+        ENABLE_DRAG_COLUMN: true,
+        AUTO_ROW_HEIGHT: true,
         ROW_KEY: 'id',
-        ENABLE_RESERVE_SELECTION: true,
         CELL_HEIGHT: 36,
-        SELECTOR_AREA_MIN_X: 0,
+        SELECTOR_AREA_MIN_X: 1,
+        DEFAULT_EXPAND_ALL: false,
         ENABLE_AUTOFILL: true,
         ENABLE_SELECTOR: true,
         ENABLE_KEYBOARD: true,
@@ -412,12 +551,19 @@ const eVirtTable = new EVirtTable(canvas, {
         FOOTER_FIXED: true,
         ENABLE_COPY: true,
         ENABLE_PASTER: true,
-
         FOOTER_POSITION: 'bottom',
+        ENABLE_FINDER: true,
+        // FINDER_CELL_BG_COLOR: 'red',
+        // ENABLE_SELECTOR_SINGLE: true,
+        ENABLE_AUTOFILL_SPAN_COL: true,
+        ENABLE_AUTOFILL_SPAN_ROW: true,
         OFFSET_HEIGHT: 16,
+        // SELECTOR_CELL_VALUE_TYPE: 'displayText', // displayText | value
         // SELECTOR_AREA_MAX_X_OFFSET: 1,
         // SELECTOR_AREA_MAX_Y_OFFSET: 1,
-        ENABLE_CONTEXT_MENU: true,
+        // SELECTOR_AREA_MAX_X_OFFSET: 5,
+        // SELECTOR_AREA_MIN_Y: 1,
+        // SELECTOR_AREA_MAX_Y_OFFSET: 1,
         CONTEXT_MENU: [
             { label: '复制', value: 'copy' },
             { label: '剪切', value: 'cut' },
@@ -427,11 +573,24 @@ const eVirtTable = new EVirtTable(canvas, {
             {
                 label: '新增',
                 value: 'add',
-                event: () => {
+                event: (_e, callback) => {
+                    callback();
                     console.log('新增');
                 },
             },
         ],
+        BODY_CELL_RULES_METHOD: (params) => {
+            const { row, column } = params;
+            if (column.key === 'work_age') {
+                return [
+                    {
+                        required: false,
+                        pattern: /^(0|[1-9]\d*)$/,
+                        message: '请输入0或正整数',
+                    },
+                ];
+            }
+        },
         // SELECTABLE_METHOD: (params: SelectableParams) => {
         //     const { row, rowIndex } = params;
         //     if (rowIndex === 4) {
@@ -487,40 +646,49 @@ const eVirtTable = new EVirtTable(canvas, {
         //     };
         // },
         // 改变前需要篡改数据
-        BEFORE_VALUE_CHANGE_METHOD: (changeList) => {
-            return changeList;
-            // if(changeList.some((item) => item.key !== 'requiredQuantity')) {
-            //     return changeList.map(item=>{
-            //       item.row.emp_name = '张三111';
-            //     });
-            // }
-            // return new Promise((resolve) => {
-            //     setTimeout(() => {
-            //         const ll = changeList.map((item) => {
-            //             const { value, key, rowKey, oldValue } = item;
-            //             if (key === 'requiredQuantity') {
-            //                 // 清空的
-            //                 if ([null, '', undefined].includes(value)) {
-            //                     return item;
-            //                 }
-            //                 // 数字的
-            //                 if (!isNaN(value) && Number(value) < 1000000000) {
-            //                     return {
-            //                         ...item,
-            //                         value: Number(value),
-            //                     };
-            //                 }
-            //                 return {
-            //                     ...item,
-            //                     value: oldValue,
-            //                 };
-            //             }
-            //             return item;
-            //         });
-            //         resolve(ll);
-            //     }, 1000);
-            // });
-        },
+        // BEFORE_VALUE_CHANGE_METHOD: (changeList) => {
+        // let list: BeforeValueChangeItem[] = [
+        //     {
+        //         rowKey: '1_0',
+        //         key: 'emp_no',
+        //         value: Math.random().toString(36).substring(2, 7),
+        //     },
+        // ];
+        // const data = [...changeList, ...list];
+        // console.log('修改前数据', data);
+        // return data;
+        // if(changeList.some((item) => item.key !== 'requiredQuantity')) {
+        //     return changeList.map(item=>{
+        //       item.row.emp_name = '张三111';
+        //     });
+        // }
+        // return new Promise((resolve) => {
+        //     setTimeout(() => {
+        //         const ll = changeList.map((item) => {
+        //             const { value, key, rowKey, oldValue } = item;
+        //             if (key === 'requiredQuantity') {
+        //                 // 清空的
+        //                 if ([null, '', undefined].includes(value)) {
+        //                     return item;
+        //                 }
+        //                 // 数字的
+        //                 if (!isNaN(value) && Number(value) < 1000000000) {
+        //                     return {
+        //                         ...item,
+        //                         value: Number(value),
+        //                     };
+        //                 }
+        //                 return {
+        //                     ...item,
+        //                     value: oldValue,
+        //                 };
+        //             }
+        //             return item;
+        //         });
+        //         resolve(ll);
+        //     }, 1000);
+        // });
+        // },
         // BEFORE_PASTE_DATA_METHOD: (changeList, xArr, yArr, texArr) => {
         //     console.log(yArr, texArr);
         //     const [minY, maxY] = yArr;
@@ -562,92 +730,107 @@ const eVirtTable = new EVirtTable(canvas, {
         //         }, 1000);
         //     });
         // },
-        EXPAND_LAZY_METHOD: (params: any) => {
-            const i = params.row.id;
-            return new Promise((resolve) => {
-                setTimeout(() => {
-                    const list = [
-                        {
-                            id: 1,
-                            emp_no: `${i}-1-1`,
-                            emp_name: `张三${i}-层级1-1`,
-                            children: [],
-                        },
-                        {
-                            id: 2,
-                            emp_no: `${i}-1-2`,
-                            emp_name: `张三${i}-层级1-1`,
-                        },
-                    ];
-                    resolve(list);
-                }, 1000);
-            });
-        },
-        BODY_CELL_STYLE_METHOD: (cell: any) => {
-            const { rowIndex, column } = cell;
-            if (rowIndex == 5 && column.key === 'phone')
-                return {
-                    color: 'blue',
-                    backgroundColor: 'red',
-                };
-            return {};
-        },
+        // EXPAND_LAZY_METHOD: (params: any) => {
+        //     const i = params.row.id;
+        //     return new Promise((resolve) => {
+        //         setTimeout(() => {
+        //             const list = [
+        //                 {
+        //                     id: `${i}-1`,
+        //                     emp_no: `${i}-1`,
+        //                     emp_name: `张三${i}-1`,
+        //                     children: [],
+        //                     _hasChildren: true,
+        //                 },
+        //                 {
+        //                     id: `${i}-2`,
+        //                     emp_no: `${i}-2`,
+        //                     emp_name: `张三${i}-2`,
+        //                 },
+        //             ];
+        //             resolve(list);
+        //         }, 1000);
+        //     });
+        // },
+        // BODY_CELL_STYLE_METHOD: (cell: any) => {
+        //     const { rowIndex, column, isHasChanged } = cell;
+        //     if (isHasChanged)
+        //         return {
+        //             color: 'blue',
+        //             backgroundColor: 'red',
+        //         };
+        //     return {};
+        // },
         BODY_CELL_READONLY_METHOD: (params: any) => {
             const { rowIndex, column } = params;
             if (rowIndex == 15 && ['emp_name221', 'emp_name2'].includes(column.key)) {
                 return true;
             }
         },
-        // SPAN_METHOD: (params) => {
-        //     const { mergeColCell, mergeRowCell } = eVirtTable.getUtils();
-        //     const { colIndex, column, row, visibleLeafColumns, visibleRows } = params;
-        //     if (
-        //         [
-        //             // 'selection',
-        //             'unit',
-        //             'work_type',
-        //             'household_city',
-        //             'household_address',
-        //             'requiredQuantity',
-        //             'work_status',
-        //             'materialNo',
-        //         ].includes(column.key)
-        //     ) {
-        //         // 合并行单元格
-        //         return mergeRowCell(params, column.key, ['emp_name', column.key]);
-        //     }
-        //     if (column.key === 'emp_name') {
-        //         // 合并行单元格
-        //         return mergeRowCell(params, 'emp_name', ['emp_name']);
-        //     }
-        //     if (column.key === 'phone') {
-        //         // 合并行单元格
-        //         return mergeRowCell(params, 'emp_name', ['emp_name', 'phone']);
-        //     }
-        //     if (['emp_name221', 'emp_name222', 'emp_name2'].includes(column.key)) {
-        //         return mergeColCell(params, ['emp_name221', 'emp_name222', 'emp_name2']);
-        //     }
-        //     // if (column.key === 'selection') {
-        //     //     // 合并行单元格
-        //     //     return mergeRowCell(params, 'emp_name');
-        //     // }
-        //     // // 合并动态列单元格
-        //     // if (colIndex > 4) {
-        //     //   const spanObj = getSpanObjByColumn(row, visibleLeafColumns);
-        //     //   if (spanObj[column.key] === 0) {
-        //     //     return {
-        //     //       rowspan: 0,
-        //     //       colspan: 0,
-        //     //     };
-        //     //   }
-        //     //   return {
-        //     //     rowspan: 1,
-        //     //     colspan: spanObj[column.key],
-        //     //   };
-        //     // }
-        // },
+        ENABLE_HEADER_CONTEXT_MENU: true,
+        ENABLE_CONTEXT_MENU: true,
+        SPAN_METHOD: (params) => {
+            const { mergeColCell, mergeRowCell } = eVirtTable.getUtils();
+            const { colIndex, column, row, visibleLeafColumns, visibleRows } = params;
+            if (
+                [
+                    // 'selection',
+                    'unit',
+                    'work_type',
+                    'household_city',
+                    'household_address',
+                    'requiredQuantity',
+                    'work_status',
+                    'materialNo',
+                ].includes(column.key)
+            ) {
+                // 合并行单元格
+                return mergeRowCell(params, column.key, ['emp_name', column.key]);
+            }
+            if (column.key === 'emp_name') {
+                // 合并行单元格
+                return mergeRowCell(params, 'emp_name', ['emp_name']);
+            }
+            if (column.key === 'phone') {
+                // 合并行单元格
+                return mergeRowCell(params, 'emp_name', ['emp_name', 'phone']);
+            }
+            // if (['emp_name221', 'emp_name222', 'emp_name2'].includes(column.key)) {
+            //     return mergeColCell(params, ['emp_name221', 'emp_name222']);
+            // }
+            // if (column.key === 'selection') {
+            //     // 合并行单元格
+            //     return mergeRowCell(params, 'emp_name');
+            // }
+            // // 合并动态列单元格
+            // if (colIndex > 4) {
+            //   const spanObj = getSpanObjByColumn(row, visibleLeafColumns);
+            //   if (spanObj[column.key] === 0) {
+            //     return {
+            //       rowspan: 0,
+            //       colspan: 0,
+            //     };
+            //   }
+            //   return {
+            //     rowspan: 1,
+            //     colspan: spanObj[column.key],
+            //   };
+            // }
+        },
     },
 });
+eVirtTable.filterMethod((list) => {
+    return list.filter((item) => item.id !== '1_3');
+});
+function getRandomString(minLen = 5, maxLen = 20) {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const len = Math.floor(Math.random() * (maxLen - minLen + 1)) + minLen;
+    let str = '';
+    for (let i = 0; i < len; i++) {
+        str += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return str;
+}
 eVirtTable.on('error', (error) => {
     console.error(error);
 });
@@ -693,6 +876,10 @@ eVirtTable.on('overlayerChange', (container) => {
             cellWrapView.cells.forEach((cell) => {
                 const cellEl = document.createElement('div');
                 Object.assign(cellEl.style, cell.style);
+                Object.keys(cell.domDataset).forEach((key) => {
+                    cellEl.setAttribute(key, cell.domDataset[key]);
+                });
+
                 if (typeof cell.render === 'function') {
                     cell.render(cellEl, cell);
                 }
@@ -775,6 +962,9 @@ document.getElementById('search')?.addEventListener('click', () => {
     eVirtTable.filterMethod((list) => {
         return list.filter((item) => item.emp_name.includes(text?.value));
     });
+});
+document.getElementById('getCurrentRow')?.addEventListener('click', () => {
+    console.log(eVirtTable.getCurrentRow());
 });
 document.getElementById('pre')?.addEventListener('click', () => {
     let data: any[] = [];
@@ -888,6 +1078,11 @@ document.getElementById('updateCssVar')?.addEventListener('click', () => {
         document.documentElement.classList.add('dark');
     }
 });
+let falg = false;
+document.getElementById('expandAll')?.addEventListener('click', () => {
+    falg = !falg;
+    eVirtTable.toggleExpandAll(falg);
+});
 document.getElementById('setValidator')?.addEventListener('click', () => {
     const errors = [
         {
@@ -925,6 +1120,132 @@ document.getElementById('setConfig')?.addEventListener('click', () => {
             },
         ],
     });
+});
+document.getElementById('loadData')?.addEventListener('click', () => {
+    eVirtTable.setLoading(true);
+    let data: any[] = [];
+    for (let i = 0; i < 500; i += 1) {
+        data.push({
+            _height: [3, 5, 6, 7].includes(i) ? 60 : 0,
+            id: `1_${i}`,
+            // _readonly: true,
+            emp_name: `张三${i % 5 ? 1 : 0}`,
+            emp_name11: `张三${i % 5 ? 1 : 0}`,
+            emp_name221: `张三${i % 5 ? 1 : 0}`,
+            emp_name222: `张三${i % 5 ? 1 : 0}`,
+            emp_name2: `张三${i % 5 ? 1 : 0}`,
+            emp_no: i,
+            dep_name: ['zhinan', 'shejiyuanze', 'yizhi'],
+            job_name: i === 5 ? '产品经理测试很长的名字' : `产品经理${i}`,
+            phone: i === 4 ? '13159645561a' : `${13159645561 + i}`,
+            // eslint-disable-next-line no-nested-ternary
+            sex: i % 4 === 0 ? 1 : i === 3 ? null : 2,
+            address:
+                // eslint-disable-next-line no-nested-ternary
+                i === 1 ? `海淀区北京路海淀区北京路十分地${i}号` : i === 4 ? '' : `海淀区北京路${i}号`,
+            work_type: `兼职${i}`,
+            work_status: `在职${i}`,
+            household_city: `深圳${i}`,
+            household_address: `深南大道${i}号`,
+            nation: `汉${i}`,
+            work_address: `南京路${i}号`,
+            work_email: `${28976633 + i}@qq.com`,
+            email: `${4465566 + i}@qq.com`,
+            work_age: 2 + i,
+            company_age: 1 + i,
+            contract_company: `飞鸟物流公司${i}`,
+            qq: 35860567 + i,
+            salary_month: `${1996 + i}-09`,
+            birthday: `${1996 + i}-09-21`,
+            age: 1 + i,
+            brandName: `博世${i}`,
+            goodsName: `电钻${i}`,
+            sn: `SDFSD${i}`,
+            materialNo: `1231${i}`,
+            unit: '个',
+            requiredQuantity: 10,
+            customerRemarks: `测试测试${i}`,
+            purchasePrice: 10.2 + i,
+            salePrice: 12.3 + i,
+            children: [
+                {
+                    id: `${i}-1`,
+                    emp_no: `${i}-1`,
+                    emp_name: `张三${i}-1`,
+                },
+                {
+                    id: `${i}-2`,
+                    emp_no: `${i}-2`,
+                    emp_name: `张三${i}-2`,
+                    children: [
+                        {
+                            id: `${i}-2-1`,
+                            emp_no: `${i}-2-1`,
+                            emp_name: `张三${i}-2-1`,
+                        },
+                    ],
+                },
+            ],
+        });
+    }
+    setTimeout(() => {
+        eVirtTable.loadData(data);
+        eVirtTable.setLoading(false);
+    }, 3000);
+});
+
+document.getElementById('clearEditableData')?.addEventListener('click', () => {
+    const ll = eVirtTable.clearEditableData(111);
+    console.log('clearEditableData', ll);
+});
+
+document.getElementById('setReadOnly')?.addEventListener('click', () => {
+    const list = [
+        {
+            rowKey: '1_1',
+            key: 'emp_no',
+            value: '张三111',
+        },
+        {
+            rowKey: '1_2',
+            key: 'emp_no',
+            value: '张三222',
+        },
+        {
+            rowKey: '1_4',
+            key: 'emp_no',
+            value: '张三333',
+        },
+    ];
+    eVirtTable.batchSetItemValue(list, true, false);
+});
+document.getElementById('getChangedValues')?.addEventListener('click', () => {
+    console.log(eVirtTable.getChangedData());
+});
+
+document.getElementById('visible')?.addEventListener('click', () => {
+    eVirtTable.showColumns(['phone', 'sex'], true);
+});
+document.getElementById('hide')?.addEventListener('click', () => {
+    eVirtTable.showColumns(['phone', 'sex'], false);
+});
+
+const customHeader = localStorage.getItem('customHeader');
+if (customHeader) {
+    console.log('有缓存自定义表头');
+    eVirtTable.setCustomHeader(JSON.parse(customHeader));
+}
+eVirtTable.on('customHeaderChange', (customHeader) => {
+    console.log('customHeaderChange', customHeader);
+    // 如果customHeader为空，则删除localStorage
+    if (Object.keys(customHeader).length === 0) {
+        localStorage.removeItem('customHeader');
+    } else {
+        localStorage.setItem('customHeader', JSON.stringify(customHeader));
+    }
+});
+document.getElementById('clearChangeData')?.addEventListener('click', () => {
+    eVirtTable.clearChangeData();
 });
 // 销毁
 function destroy() {

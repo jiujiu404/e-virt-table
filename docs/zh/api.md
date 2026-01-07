@@ -28,18 +28,22 @@ type EVirtTableOptions = {
 | HEADER_FONT | 表头字体 | string | 12px normal Arial |
 | BODY_FONT | 单元格字体 | string | 12px normal Arial |
 | BORDER_COLOR | 区域边框颜色 | string | #e1e6eb |
-| WIDTH | 宽度为 0 表示自适应100% | number | 0 |
 | RESIZE_MIN_WIDTH | 最小可调整宽度 | number | 40 |
 | HEIGHT | 高度，高度为 0 表示自适应 | number | 0 |
+| COLUMNS_ALIGN | 全局水平对齐方式 | `"left"`, `"center"`, `"right"` | left |
+| COLUMNS_VERTICAL_ALIGN | 全局垂直对齐方式 | `"top"`, `"middle"`, `"bottom"` | middle |
 | EMPTY_BODY_HEIGHT | 数据为空时表格体的高度 | number | 120 |
 | EMPTY_CUSTOM_STYLE | 自定义空数据样式 | ^[object]`CSSProperties` | — |
 | EMPTY_TEXT | 空数据文本 | string | 暂无数据 |
 | MAX_HEIGHT | 最大高度，高度为 0 表示自适应 | number | 1000 |
+| AUTO_ROW_HEIGHT | 所有行自适应高度 | boolean | false |
 | BORDER_RADIUS | 区域边框圆角 | number | 8 |
 | HEADER_HEIGHT | 表头行高 | number | 36 |
 | HEADER_BG_COLOR | 表头背景色 | string | #F8FAFF |
 | BODY_BG_COLOR | body 背景色 | string | #F8FAFF |
 | HEADER_TEXT_COLOR | 表头文本颜色 | string | #1D2129 |
+| BODY_TEXT_COLOR | body文本颜色 | string | — | #4E5969 |
+| FOOTER_TEXT_COLOR | footer文本颜色 | string | — | #4E5969 |
 | LOADING_ICON_SVG | 加载 svg 图标 | string | — |
 | LOADING_ICON_COLOR | 加载 svg 图标颜色 | string | — |
 | EXPAND_ICON_SVG | 树形展开svg 图标 | string | — |
@@ -47,7 +51,11 @@ type EVirtTableOptions = {
 | EXPAND_ICON_COLOR | 展开图标颜色 | string | #4E5969 |
 | ERROR_TIP_ICON_COLOR | 错误提示颜色 | string | red |
 | ERROR_TIP_ICON_SIZE | 错误提示图标大小 | number | 6 |
+| EXPAND_LAZY | tree 是否开启懒加载	 | boolean | false |
 | DEFAULT_EXPAND_ALL | tree 默认是否全部展开 | boolean | false |
+| TREE_INDENT | 树形缩进宽度	 | number | 20 |
+| TREE_LINE          | tree是否划线   | boolean  | false  |
+| TREE_LINE_COLOR    | tree的划线颜色   | string  | '#e1e6eb'  |
 | CELL_WIDTH | 表格 body 部分的宽度 | number | 100 |
 | CELL_HEIGHT | 表格 body 部分的行高 | number | 36 |
 | CELL_PADDING | 表格 body 部分的 padding | number | 8 |
@@ -60,6 +68,7 @@ type EVirtTableOptions = {
 | SELECT_ROW_COL_BG_COLOR | 当前焦点单元格所在行、列的背景色 | string | `rgba(82,146,247,0.1)` |
 | EDIT_BG_COLOR | 可编辑背景色 | string | `rgba(221,170,83,0.1)` |
 | AUTOFILL_POINT_BORDER_COLOR | 填充点的边框颜色 | string | #fff |
+| CHECKBOX_KEY | 选择key,设置后会根据key关联勾选数据 | string | - |
 | CHECKBOX_COLOR | 选择框颜色 | string | `rgb(82,146,247)` |
 | CHECKBOX_SIZE | 选择框大小 | number | 20 |
 | CHECKBOX_CHECK_SVG | 选择框选中图标 | string | — |
@@ -88,7 +97,6 @@ type EVirtTableOptions = {
 | ENABLE_SELECTOR_ALL_COLS | 启用选择器-批量选中行 | boolean | true |
 | ENABLE_MERGE_CELL_LINK | 启用合并格子数据关联 | boolean | false |
 | ENABLE_AUTOFILL | 启用填充 | boolean | true |
-| ENABLE_CONTEXT_MENU | 启用右键 | boolean | true |
 | ENABLE_COPY | 启用复制 | boolean | true |
 | ENABLE_PASTER | 启用粘贴 | boolean | true |
 | ENABLE_RESIZE_ROW | 启用调整行高 | boolean | true |
@@ -100,6 +108,7 @@ type EVirtTableOptions = {
 | ENABLE_KEYBOARD | 启用键盘 | boolean | true |
 | ENABLE_HISTORY | 启用历史记录，可回退 | boolean | true |
 | HISTORY_NUM | 启用历史记录数量 | number | 50 |
+| SORT_STRICTLY | 启用严格排序，false支持多列排序 | boolean | true |
 | HIGHLIGHT_HOVER_ROW | hover 高亮当前行 | boolean | false |
 | HIGHLIGHT_HOVER_ROW_COLOR | hover 高亮当前行颜色 | string | `rgba(186,203,231,0.1)` |
 | HIGHLIGHT_SELECTED_ROW | 高亮选中当前行 | boolean | true |
@@ -110,6 +119,14 @@ type EVirtTableOptions = {
 | TOOLTIP_CUSTOM_STYLE | 提示样式 | ^[object]`CSSProperties` | true |
 | CONTEXT_MENU | 自定义右键菜单 | ^[array]`MenuItem[]` | CONTEXT_MENU |
 | PLACEHOLDER_COLOR | 占位文本颜色 | string | `#CDD0DC` |
+| CELL_HOVER_ICON_BG_COLOR | hover编辑图标背景色 | string | `#fff` |
+| CELL_HOVER_ICON_BORDER_COLOR | hover编辑图标边框 | string | `#DDE0EA` |
+| ENABLE_CONTEXT_MENU        | 是否启用 body 区域右键菜单    | boolean    | false  |
+| ENABLE_HEADER_CONTEXT_MENU | 是否启用 header 区域右键菜单  | boolean    | false  |
+| CONTEXT_MENU               | body 区域默认右键菜单项配置   | MenuItem[] | - |
+| HEADER_CONTEXT_MENU        | header 区域默认右键菜单项配置 | MenuItem[] | - |
+| CUSTOM_BODY_CONTEXT_MENU   | 自定义 body 区域右键菜单项    | MenuItem[] | []     |
+| CUSTOM_HEADER_CONTEXT_MENU | 自定义 header 区域右键菜单项  | MenuItem[] | []     |
 | HEADER_CELL_STYLE_METHOD | 自定义表头单元格样式 | ^[Function]`({column,colIndex})=>CellStyleOptions` | — |
 | BODY_CELL_STYLE_METHOD | 自定义 body 单元格样式 | ^[Function]`({row, column, rowIndex, colIndex,value,isHasChanged})=>CellStyleOptions` | — |
 | FOOTER_CELL_STYLE_METHOD | 自定 footer 义单元格样式 | ^[Function]`({row, column, rowIndex, colIndex,value})=>CellStyleOptions` | — |
@@ -117,7 +134,7 @@ type EVirtTableOptions = {
 | BODY_CELL_FORMATTER_METHOD | 自定义格式化 | ^[Function]`({row, column, rowIndex, colIndex,value})=>string\|viod` | — |
 | BODY_CELL_RULES_METHOD | 自定义校验规则 | ^[Function]`({row, column, rowIndex, colIndex,value})=>Rules\|viod` | — |
 | BODY_CELL_TYPE_METHOD | 自定义类型 | ^[Function]`({row, column, rowIndex, colIndex,value})=>Type\|viod` | — |
-| BODY_CELL_EDITOR_METHOD | 自定义编辑器类型 | ^[Function]`({row, column, rowIndex, colIndex,value})=>string\|viod` | — |
+| BODY_CELL_EDITOR_METHOD | 自定义编辑器类型 | ^[Function]`({row, column, rowIndex, colIndex,value})=>EditorOptions` | — |
 | BODY_CELL_RENDER_METHOD | 自定义单元格渲染 | ^[Function]`({row, column, rowIndex, colIndex,headIndex,visibleRows,rows})=>string\|viod` | — |
 | SPAN_METHOD | 自定义跨列/行渲染 | ^[Function]`({row, column, rowIndex, colIndex,value,visibleLeafColumns,headIndex,headPosition,visibleRows,rows})=>SpanType` | — |
 | SELECTABLE_METHOD | 自定义选择禁用 | ^[Function]`({row, rowIndex})=>boolean\|viod` | — |
@@ -159,6 +176,7 @@ type EVirtTableOptions = {
 | cellClick | body格子按下回调 | — |
 | cellHoverChange | 格子hover回调 | — |
 | cellHeaderHoverChange | 表头格子hover回调 | — |
+| currentRowChange | 选中高亮行回调 | — |
 | mouseup | mouseup回调 | — |
 | click | click回调 | — |
 | dblclick | dblclick回调 | — |
@@ -169,7 +187,10 @@ type EVirtTableOptions = {
 | keydown | keydown回调 | — |
 | hoverIconClick | hoverIcon点击回调 | — |
 | onPastedDataOverflow | 粘贴溢出时回调 | `PastedDataOverflow`  |
+| sortChange | 当表格的排序条件发生变化的时候会触发该事件 | Map<string, SortStateMapItem> |
 | error | error回调 | — |
+| customHeaderChange | 自定义表头事件 | `CustomHeader` |
+
 
 ## Methods
 
@@ -208,17 +229,26 @@ type EVirtTableOptions = {
 | setExpandRowKeys       | 通过 rowKey 设置展开项        | (rowkeys[],boolean)                                       |
 | toggleRowExpand        | 展开项取反                    | (rowKey, expand)                                          |
 | toggleExpandAll        | 展开全部                      | boolean                                                   |
+| getExpandRowKeys       | 获取展开keys                 | rowkeys[]                                                   |
 | clearSelection         | 清除选中                      | —                                                         |
 | toggleRowSelection     | 取反                          | row                                                       |
 | setSelectionByRows     | 设置选中                      | (rows,selected)                                           |
 | setSelectionByRowKeys  | 通过 RowKeys 设置选中         | (RowKeys,selected)                                        |
 | getSelectionRows       | 获取选中                      | —                                                         |
+| setCurrentRow          | 通过rowkey设置高亮当前行          | —                                                      |
+| setCurrentRowByRowIndex| 通过rowIndex设置高亮当前行    | —                                                     |
+| getCurrentRow          | 获取高亮当前行数据          | —                                                     |
 | toggleAllSelection     | 切换所有行的选中状态          | —                                                         |
 | getPositionForRowIndex | 获取当前行的高度定位          | —                                                         |
 | getCellValue           | 通过 rowKey 和 key 获取格子值 | (rowKey, key)                                             |
 | getUtils               | 获取工具类方法，如内置合并行列方法                  | —                                     |
+| clearSort              | 清除排序                      | —                                                         |
+| clearMaxRowHeight      | 清除最大行高记录（重置所有行高） | —                                                       |
 | contextMenuHide        | 隐藏右键菜单                  | —                                                         |
 | destroy                | 销毁                          | —                                                         |
+| setCustomHeader | 设置自定义表头                   | `(CustomHeader,ignoreEmit)` |
+| getCustomHeader | 获取自定义表头数据 | `{CustomHeader，Column[]}`  |
+| clearChangeData | 清空改变值 |  —  |
 
 ## Column
 | 参数 | 说明 | 类型 | 默认值 |
@@ -232,8 +262,13 @@ type EVirtTableOptions = {
 | hide | 指定列隐藏 | boolean | false |
 | sort | 指定列排序 | number | 0 |
 | width | 列的宽度 | number | 100 |
-| align | 水平对齐方式 | `"left"`, `"center"`, `"right"` | center |
+| minWidth | 列的最小宽度 | number | —|
+| maxWidth | 列的最大宽度 | number | —|
+| headerAlign | 表头水平对齐方式 | `"left"`, `"center"`, `"right"` | left |
+| headerVerticalAlign | 表头垂直对齐方式 | `"top"`, `"middle"`, `"bottom"` | middle |
+| align | 水平对齐方式 | `"left"`, `"center"`, `"right"` | left |
 | verticalAlign | 垂直对齐方式 | `"top"`, `"middle"`, `"bottom"` | middle |
+| hideHeaderSelection | 表头Selection是否隐藏 | boolean | false |
 | fixed | 是否固定列 | `"left"`, `"right"` | — |
 | render | 自定义渲染方法 | string\|Function | — |
 | renderFooter | 自定义渲染底部方法 | string\|Function | — |
@@ -245,10 +280,21 @@ type EVirtTableOptions = {
 | column | 当前列对象 | Column | — |
 | hoverIconName | 悬浮图标名字，可ICONS配置 | string | — |
 | placeholder | 占位符文本 | string | — |
+| autoRowHeight | 格子自适应行高 | boolean | false |
+| overflowTooltipHeaderShow | 表头是否显示溢出提示 | boolean | true |
 | overflowTooltipShow | 是否显示溢出提示 | boolean | true |
 | overflowTooltipMaxWidth | 溢出提示的宽度 | number | 500 |
 | overflowTooltipPlacement | 溢出提示的位置|  ^[string]`top, top-start, top-end, right, right-start, right-end, left, left-start, left-end, bottom, bottom-start, bottom-end` | — |
+| sortBy | 排序类型 | `'number'`, `'string'`, `'date'`, `(a: rowData, b: rowData) => number` | — |
+| sortIconName | 默认排序图标 | `string` | — |
+| sortAscIconName | 升序排序图标 | `string` | — |
+| sortDescIconName | 降序排序图标 | `string` | — |
 | rules | 校验规则 | Rules | — |
+| maxLineClamp | 最大溢出截断行数，默认`auto`根据内容撑开 | `auto,number` | auto |
+| maxLineClampHeader | 表头最大溢出截断行数，默认`auto`根据内容撑开 | `auto,number` | auto |
+| autoRowHeight | 当前列行自适应高度 | boolean | false |
+| dragDisabled | 当前列禁用拖拽 | boolean | false |
+| selectorCellValueType | 选择器选择格子类型 | `SelectorCellValueType` | `value` |
 
 ## Row
 
@@ -262,7 +308,17 @@ type EVirtTableOptions = {
 
 ## Rules
 
--   可参考 [async-validator](https://github.com/yiminghe/async-validator)
+```ts
+
+type Rule = {
+    required?: boolean;
+    pattern?: RegExp;
+    validator?: RuleValidator;
+    message?: string;
+};
+type Rules = Rule[];
+
+```
 
 ## CONTEXT_MENU 默认值
  
@@ -348,5 +404,53 @@ type PastedDataOverflow = {
     overflowColCount: number;
     textArr: string[][];
 };
+
+type SortDirection = 'asc' | 'desc' | 'none';
+type SortStateMapItem = { direction: SortDirection; timestamp: number };
+type SortStateMap = Map<string, SortStateMapItem>;
+type MenuItemEvent =
+    | 'copy'
+    | 'paste'
+    | 'cut'
+    | 'clearSelected'
+    | 'fixedLeft'
+    | 'fixedRight'
+    | 'fixedNone'
+    | 'hide'
+    | 'resetHeader'
+    | 'visible';
+
+type MenuItem = {
+    label: string;
+    value: string | MenuItemEvent;
+    event?: Function;
+    icon?: string;
+    divider?: boolean;
+    disabled?: boolean;
+    children?: MenuItem[];
+};
+
+const HEADER_CONTEXT_MENU: MenuItem[] = [
+    { label: '左固定', value: 'fixedLeft' },
+    { label: '右固定', value: 'fixedRight' },
+    { label: '取消固定', value: 'fixedNone' },
+    { label: '隐藏', value: 'hide' },
+    { label: '显示', value: 'visible' },
+    { label: '恢复默认', value: 'resetHeader' },
+];
+
+type CustomHeader = {
+    fixedData?: Record<string, Fixed | ''>;
+    sortData?: Record<string, number>;
+    hideData?: Record<string, boolean>;
+    resizableData?: Record<string, number>;
+};
+
+export type EditorOptions = {
+    type: string;
+    props: any;
+};
+
+type SelectorCellValueType = 'displayText' | 'value';
 
 ```

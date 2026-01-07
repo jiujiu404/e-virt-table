@@ -10,10 +10,12 @@ export default class Row {
     cells: Cell[] = [];
     fixedCells: Cell[] = [];
     noFixedCells: Cell[] = [];
+    calculatedHeightCells: Cell[] = [];
     rowIndex = 0;
     rowKey = '';
     rowType: RowType = 'body';
     data: any;
+    calculatedHeight: number = -1;
     constructor(
         ctx: Context,
         rowIndex: number,
@@ -40,6 +42,7 @@ export default class Row {
         const cells: Cell[] = [];
         const fixedCells: Cell[] = [];
         const noFixedCells: Cell[] = [];
+        const calculatedHeightCells: Cell[] = [];
         header.renderLeafCellHeaders.forEach((header) => {
             const cell = new Cell(
                 this.ctx,
@@ -59,10 +62,31 @@ export default class Row {
                 noFixedCells.push(cell);
             }
             cells.push(cell);
+            if (cell.autoRowHeight) {
+                calculatedHeightCells.push(cell);
+            }
         });
         this.cells = cells;
+        this.calculatedHeightCells = calculatedHeightCells;
         this.fixedCells = fixedCells;
         this.noFixedCells = noFixedCells;
+    }
+    updateCalculatedHeight() {
+        const heights = this.calculatedHeightCells.map((cell) => {
+            const calculatedHeight = cell.getAutoHeight();
+            const { key, height: curRowMaxHeight = -1 } = this.ctx.database.getMaxRowHeightItem(this.rowKey) || {};
+            // 设置最大值
+            if (calculatedHeight > curRowMaxHeight) {
+                this.ctx.database.setMaxRowHeightItem(this.rowKey, cell.key, calculatedHeight);
+            } else if (calculatedHeight !== 0 && cell.key === key && calculatedHeight < curRowMaxHeight) {
+                // 如果计算高度小于当前最大值，则设置为当前最大值
+                this.ctx.database.setMaxRowHeightItem(this.rowKey, cell.key, calculatedHeight);
+            }
+            return calculatedHeight;
+        });
+        // 获取最高高度
+        this.calculatedHeight = heights.length ? Math.max(...heights) : -1;
+        return this.calculatedHeight;
     }
     drawCenter() {
         this.noFixedCells.forEach((cell) => {

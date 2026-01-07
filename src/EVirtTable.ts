@@ -2,10 +2,13 @@ import {
     ChangeItem,
     Column,
     ConfigType,
+    CustomHeader,
     EventCallback,
     EVirtTableOptions,
     FilterMethod,
+    Fixed,
     Position,
+    RowParams,
     ValidateField,
     ValidateItemError,
 } from './types';
@@ -24,6 +27,9 @@ import Overlayer from './Overlayer';
 import ContextMenu from './ContextMenu';
 import { mergeColCell, mergeRowCell, getSpanArrByRow, getSpanObjByColumn } from './util';
 import './style.css';
+import Loading from './Loading';
+import { FinderBar } from './FinderBar';
+
 export default class EVirtTable {
     private options: EVirtTableOptions;
     private scroller: Scroller;
@@ -38,15 +44,18 @@ export default class EVirtTable {
     private empty: Empty;
     private overlayer: Overlayer;
     private contextMenu: ContextMenu;
+    private loading: Loading;
+    private finderBar: FinderBar;
+    private animationFrameId: number | undefined = undefined;
     ctx: Context;
+
     constructor(target: HTMLDivElement, options: EVirtTableOptions) {
         this.options = options;
-        const { overlayerElement, editorElement, selectorToolsElement, emptyElement, contextMenuElement } = options;
+        const { overlayerElement, editorElement, emptyElement, contextMenuElement } = this.options;
         const containerElement = this.createContainer(
             target,
             overlayerElement,
             editorElement,
-            selectorToolsElement,
             emptyElement,
             contextMenuElement,
         );
@@ -63,6 +72,8 @@ export default class EVirtTable {
         this.selectorTools = new SelectorTools(this.ctx);
         this.overlayer = new Overlayer(this.ctx);
         this.contextMenu = new ContextMenu(this.ctx);
+        this.loading = new Loading(this.ctx);
+        this.finderBar = new FinderBar(this.ctx);
         this.ctx.on('draw', () => {
             this.draw();
         });
@@ -71,6 +82,7 @@ export default class EVirtTable {
         });
         this.draw();
     }
+
     private createContainer(
         containerElement: HTMLDivElement,
         _overlayerElement?: HTMLDivElement,
@@ -87,6 +99,7 @@ export default class EVirtTable {
         containerElement.tabIndex = 0;
         canvasElement.className = 'e-virt-table-canvas';
         overlayerElement.className = 'e-virt-table-overlayer';
+        overlayerElement.setAttribute('data-overlayer', _overlayerElement ? 'custom' : 'default');
         const editorElement = _editorElement || document.createElement('div');
         editorElement.className = 'e-virt-table-editor';
         const selectorToolsElement = _selectorToolsElement || document.createElement('div');
@@ -106,28 +119,37 @@ export default class EVirtTable {
             contextMenuElement,
         };
     }
+    private doDraw(ignoreOverlayer = false) {
+        this.header.update();
+        this.footer.update();
+        this.body.update();
+        this.ctx.paint.clear();
+        this.body.draw();
+        this.footer.draw();
+        this.header.draw();
+        this.scroller.draw();
+        // 忽略重绘覆盖层，解决按下事件时，重绘覆盖层导致事件无法触发，目前只在Selector中按下事件使用
+        if (!ignoreOverlayer) {
+            this.overlayer.draw();
+        }
+    }
     draw(ignoreOverlayer = false) {
-        requestAnimationFrame(() => {
-            this.header.update();
-            this.footer.update();
-            this.body.update();
-            this.ctx.paint.clear();
-            this.body.draw();
-            this.footer.draw();
-            this.header.draw();
-            this.scroller.draw();
-            // 忽略重绘覆盖层，解决按下事件时，重绘覆盖层导致事件无法触发，目前只在Selector中按下事件使用
-            if (!ignoreOverlayer) {
-                this.overlayer.draw();
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+        }
+        this.animationFrameId = requestAnimationFrame(() => {
+            this.doDraw(ignoreOverlayer);
+            const needReDraw = this.body.updateAutoHeight();
+            if (needReDraw) {
+                this.doDraw(ignoreOverlayer);
             }
         });
     }
     loadConfig(_config: ConfigType) {
         this.ctx.config.init(_config);
-        this.ctx.database.init();
+        //重新加载config，初始化表格，但是默认不清除用户操作
+        this.ctx.database.init(false);
         this.header.init();
-        // 更新右键菜单，有可能配置项变化
-        this.contextMenu.updated();
         this.ctx.emit('draw');
     }
     loadColumns(columns: Column[]) {
@@ -142,15 +164,39 @@ export default class EVirtTable {
         this.editor.doneEdit();
         this.ctx.database.setData(data);
         this.header.init();
+        this.tooltip.hide();
         this.ctx.emit('draw');
     }
     loadFooterData(data: any[]) {
         this.ctx.database.setFooterData(data);
         this.ctx.emit('draw');
     }
+    setCustomHeader(customHeader: CustomHeader, ignoreEmit = true) {
+        this.ctx.database.setCustomHeader(customHeader, ignoreEmit);
+        this.header.init();
+        this.ctx.emit('draw');
+    }
+    getCustomHeader() {
+        return this.header.getCustomHeader();
+    }
+    showColumns(keys: string[], show = true) {
+        this.ctx.database.setCustomHeaderHideData(keys, !show);
+        this.header.init();
+        this.ctx.emit('draw');
+    }
+    fixedColumns(keys: string[], fixed: Fixed | '') {
+        this.ctx.database.setCustomHeaderFixedData(keys, fixed);
+        this.header.init();
+        this.ctx.emit('draw');
+    }
 
-    setLoading(ladong: boolean) {
-        this.ctx.database.setLoading(ladong);
+    setLoading(loading: boolean) {
+        this.ctx.loading = loading;
+        if (loading) {
+            this.loading.show();
+        } else {
+            this.loading.hide();
+        }
     }
     on(event: string, callback: EventCallback) {
         this.ctx.on(event, callback);
@@ -162,9 +208,10 @@ export default class EVirtTable {
         this.ctx.off(event, callback);
     }
     filterMethod(func: FilterMethod) {
-        this.scrollTo(0, 0);
         this.ctx.database.setFilterMethod(func);
-        this.ctx.database.init();
+        //重新初始化表格，但是默认不清除用户操作
+        this.ctx.database.init(false);
+        this.header.init();
         this.ctx.emit('draw');
     }
     editCell(rowIndex: number, colIndex: number) {
@@ -180,6 +227,12 @@ export default class EVirtTable {
         this.ctx.setItemValueByEditor(rowKey, key, value, history, reDraw);
         this.editor.doneEdit();
     }
+
+    clearEditableData(value = null) {
+        const xArr = [0, this.ctx.maxColIndex];
+        const yArr = [0, this.ctx.maxRowIndex];
+        return this.selector.clearSelectedData(xArr, yArr, false, value);
+    }
     clearEditor() {
         this.editor.clearEditor();
     }
@@ -191,6 +244,30 @@ export default class EVirtTable {
     }
     getChangedRows() {
         return this.ctx.database.getChangedRows();
+    }
+    setCurrentRowByRowIndex(rowIndex: number) {
+        this.ctx.currentCell = this.ctx.database.getVirtualBodyCell(rowIndex, 0);
+        this.ctx.emit('draw');
+    }
+    setCurrentRow(rowKey: string) {
+        const column = this.ctx.database.getColumnByColIndex(0);
+        if (!column) {
+            return;
+        }
+        this.ctx.currentCell = this.ctx.database.getVirtualBodyCellByKey(rowKey, column.key);
+        this.ctx.emit('draw');
+    }
+    getCurrentRow() {
+        const cell = this.ctx.currentCell;
+        if (!cell) {
+            return;
+        }
+        const rowData: RowParams = {
+            row: cell.row,
+            rowIndex: cell.rowIndex,
+            rowKey: cell.rowKey,
+        };
+        return rowData;
     }
     clearValidate() {
         this.ctx.database.clearValidate();
@@ -237,6 +314,13 @@ export default class EVirtTable {
                     if (Array.isArray(err) && err.length) {
                         const [_err] = err;
                         const { rowKey, key } = _err;
+                        const targetRow = this.ctx.database.getRowForRowKey(rowKey);
+                        if (targetRow) {
+                            const { parentRowKeys = [] } = targetRow;
+                            if (parentRowKeys && parentRowKeys.length) {
+                                this.setExpandRowKeys(parentRowKeys, true);
+                            }
+                        }
                         this.scrollToRowkey(rowKey);
                         this.scrollToColkey(key);
                     }
@@ -247,13 +331,22 @@ export default class EVirtTable {
     }
     setValidations(errors: ValidateItemError[]) {
         errors.forEach((item) => {
-            const { rowIndex, key, message } = item;
-            this.ctx.database.setValidationErrorByRowIndex(rowIndex, key, message);
+            const { rowIndex, key, message, rowKey } = item;
+            if (rowIndex !== undefined && rowKey === undefined) {
+                const _rowKey = this.ctx.database.getRowKeyForRowIndex(rowIndex);
+                this.ctx.database.setValidationErrorByRowKey(_rowKey, key, message);
+            }
+            if (rowKey) {
+                this.ctx.database.setValidationErrorByRowKey(rowKey, key, message);
+            }
         });
         // 滚动到错误位置，取第一个错误
         if (errors && Array.isArray(errors) && errors.length) {
             const [err] = errors;
-            if (err && err.rowIndex >= 0 && err.key) {
+            if (err && err.rowKey) {
+                this.scrollToRowkey(err.rowKey);
+                this.scrollToColkey(err.key);
+            } else if (err && err.rowIndex !== undefined && err.rowIndex >= 0 && err.key) {
                 const { rowIndex, key } = err;
                 this.scrollToRowIndex(rowIndex);
                 this.scrollToColkey(key);
@@ -314,6 +407,9 @@ export default class EVirtTable {
     setExpandRowKeys(keys: any[], expand = true) {
         this.ctx.database.setExpandRowKeys(keys, expand);
     }
+    getExpandRowKeys() {
+        return this.ctx.database.getExpandRowKeys();
+    }
     clearSelection() {
         this.ctx.database.clearSelection();
         this.ctx.emit('draw');
@@ -362,6 +458,9 @@ export default class EVirtTable {
     getCellValueByIndex(rowIndex: number, colIndex: number) {
         return this.ctx.database.getItemValueForRowIndexAndColIndex(rowIndex, colIndex);
     }
+    clearSort() {
+        this.ctx.database.clearSort();
+    }
     contextMenuHide() {
         this.contextMenu.hide();
     }
@@ -376,6 +475,12 @@ export default class EVirtTable {
     getColumnByKey(key: string) {
         return this.ctx.database.getColumnByKey(key)?.column;
     }
+
+    clearChangeData() {
+        this.ctx.database.clearChangeData();
+        this.ctx.emit('draw');
+    }
+
     /**
      * 销毁
      */
@@ -388,6 +493,8 @@ export default class EVirtTable {
         this.selector.destroy();
         this.autofill.destroy();
         this.contextMenu.destroy();
+        this.loading.destroy();
+        this.finderBar.destroy();
         this.ctx.destroy();
         this.ctx.containerElement.remove();
     }

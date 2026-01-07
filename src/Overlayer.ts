@@ -2,16 +2,100 @@ import type Cell from './Cell';
 import type CellHeader from './CellHeader';
 import type Context from './Context';
 import type { OverlayerContainer, OverlayerView, OverlayerWrapper } from './types';
+import { throttle } from './util';
 export default class Overlayer {
     ctx: Context;
+    observer?: MutationObserver;
     constructor(ctx: Context) {
         this.ctx = ctx;
+        this.init();
+    }
+    private arerMapsEqual(m1: Map<string, number>, m2: Map<string, number>): boolean {
+        if (m1.size !== m2.size) return false;
+
+        for (let [key, value] of m1) {
+            if (!m2.has(key)) return false;
+            if (m2.get(key) !== value) return false;
+        }
+
+        return true;
+    }
+    private init() {
+        // 监听覆盖层变化,用于自动高度计算
+        this.observer = new MutationObserver(
+            throttle(() => {
+                // 当 DOM 发生变化时执行的回调
+                const elements = this.ctx.overlayerElement.querySelectorAll('[data-auto-height="true"]');
+                const map = new Map<string, number>();
+                elements.forEach((element: Element) => {
+                    const rowIndex = Number(element.getAttribute('data-row-index'));
+                    const colIndex = Number(element.getAttribute('data-col-index'));
+                    if (isNaN(rowIndex) || isNaN(colIndex)) {
+                        return;
+                    }
+                    const rect = element.getBoundingClientRect();
+                    const key = `${rowIndex}\u200b_${colIndex}`;
+                    map.set(key, Math.round(rect.height));
+                });
+                const overlayerAutoHeightMap = this.ctx.database.getOverlayerAutoHeightMap();
+                const isNeedUpdate = !this.arerMapsEqual(overlayerAutoHeightMap, map);
+                if (isNeedUpdate) {
+                    this.ctx.database.setOverlayerAutoHeightMap(map);
+                    if (overlayerAutoHeightMap.size === 0 && map.size === 0) {
+                        return;
+                    }
+                    this.ctx.emit('draw');
+                }
+            }, 16.67),
+        );
+        this.observer.observe(this.ctx.overlayerElement, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            characterData: true,
+        });
+        // 自定义覆盖层时，不监听覆盖层变化
+        if (this.ctx.overlayerElement.getAttribute('data-overlayer') === 'default') {
+            this.ctx.on('overlayerChange', (container) => {
+                const overlayerEl = this.ctx.overlayerElement;
+                // 移除所有子元素
+                overlayerEl.replaceChildren();
+                Object.assign(overlayerEl.style, container.style);
+                container.views.forEach((typeView: OverlayerWrapper) => {
+                    const typeDiv = document.createElement('div');
+                    typeDiv.className = typeView.class;
+                    Object.assign(typeDiv.style, typeView.style);
+                    typeView.views.forEach((cellWrapView) => {
+                        const cellWrap = document.createElement('div');
+                        Object.assign(cellWrap.style, cellWrapView.style);
+                        cellWrapView.cells.forEach((cell) => {
+                            const cellEl = document.createElement('div');
+                            Object.assign(cellEl.style, cell.style);
+                            Object.keys(cell.domDataset).forEach((key) => {
+                                cellEl.setAttribute(key, cell.domDataset[key]);
+                            });
+
+                            if (typeof cell.render === 'function') {
+                                cell.render(cellEl, cell);
+                            }
+                            cellWrap.appendChild(cellEl);
+                        });
+                        typeDiv.appendChild(cellWrap);
+                    });
+                    overlayerEl.appendChild(typeDiv);
+                });
+            });
+        }
     }
     draw() {
         const overlayer = this.getContainer();
         this.ctx.emit('overlayerChange', overlayer);
     }
     destroy() {
+        // 清除MutationObserver
+        if (this.observer) {
+            this.observer.disconnect();
+        }
         this.ctx.emit('overlayerChange', {
             style: {},
             views: [],
