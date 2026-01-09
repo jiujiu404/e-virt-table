@@ -18,7 +18,6 @@ export type containerElementOptions = {
     canvasElement: HTMLCanvasElement;
     overlayerElement: HTMLDivElement;
     editorElement: HTMLDivElement;
-    selectorToolsElement: HTMLDivElement;
     emptyElement?: HTMLDivElement;
     contextMenuElement?: HTMLDivElement;
     loadingElement?: HTMLDivElement;
@@ -82,7 +81,6 @@ export default class Context {
     canvasElement: HTMLCanvasElement;
     overlayerElement: HTMLDivElement;
     editorElement: HTMLDivElement;
-    selectorToolsElement: HTMLDivElement;
     emptyElement?: HTMLDivElement;
     contextMenuElement?: HTMLDivElement;
     loadingElement?: HTMLDivElement;
@@ -190,6 +188,7 @@ export default class Context {
     database: Database;
     history: History;
     config: Config;
+
     constructor(containerOptions: containerElementOptions, options: EVirtTableOptions) {
         const {
             containerElement,
@@ -197,7 +196,6 @@ export default class Context {
             canvasElement,
             overlayerElement,
             editorElement,
-            selectorToolsElement,
             emptyElement,
             loadingElement,
             contextMenuElement,
@@ -208,7 +206,6 @@ export default class Context {
         this.canvasElement = canvasElement;
         this.overlayerElement = overlayerElement;
         this.editorElement = editorElement;
-        this.selectorToolsElement = selectorToolsElement;
         this.emptyElement = emptyElement;
         this.loadingElement = loadingElement;
         this.contextMenuElement = contextMenuElement;

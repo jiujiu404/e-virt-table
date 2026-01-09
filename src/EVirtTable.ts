@@ -21,7 +21,6 @@ import Selector from './Selector';
 import Autofill from './Autofill';
 import Tooltip from './Tooltip';
 import Editor from './Editor';
-import SelectorTools from './SelectorTools';
 import Empty from './Empty';
 import Overlayer from './Overlayer';
 import ContextMenu from './ContextMenu';
@@ -40,7 +39,6 @@ export default class EVirtTable {
     private autofill: Autofill;
     private tooltip: Tooltip;
     private editor: Editor;
-    private selectorTools: SelectorTools;
     private empty: Empty;
     private overlayer: Overlayer;
     private contextMenu: ContextMenu;
@@ -69,7 +67,6 @@ export default class EVirtTable {
         this.tooltip = new Tooltip(this.ctx);
         this.empty = new Empty(this.ctx);
         this.editor = new Editor(this.ctx);
-        this.selectorTools = new SelectorTools(this.ctx);
         this.overlayer = new Overlayer(this.ctx);
         this.contextMenu = new ContextMenu(this.ctx);
         this.loading = new Loading(this.ctx);
@@ -87,7 +84,6 @@ export default class EVirtTable {
         containerElement: HTMLDivElement,
         _overlayerElement?: HTMLDivElement,
         _editorElement?: HTMLDivElement,
-        _selectorToolsElement?: HTMLDivElement,
         _emptyElement?: HTMLDivElement,
         _contextMenuElement?: HTMLDivElement,
     ) {
@@ -102,7 +98,6 @@ export default class EVirtTable {
         overlayerElement.setAttribute('data-overlayer', _overlayerElement ? 'custom' : 'default');
         const editorElement = _editorElement || document.createElement('div');
         editorElement.className = 'e-virt-table-editor';
-        const selectorToolsElement = _selectorToolsElement || document.createElement('div');
         const emptyElement = _emptyElement;
         const contextMenuElement = _contextMenuElement;
         stageElement.appendChild(canvasElement);
@@ -114,7 +109,6 @@ export default class EVirtTable {
             canvasElement,
             overlayerElement,
             editorElement,
-            selectorToolsElement,
             emptyElement,
             contextMenuElement,
         };
@@ -488,7 +482,6 @@ export default class EVirtTable {
         this.overlayer.destroy();
         this.empty.destroy();
         this.editor.destroy();
-        this.selectorTools.destroy();
         this.tooltip.destroy();
         this.selector.destroy();
         this.autofill.destroy();

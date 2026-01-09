@@ -152,57 +152,6 @@
     overflow-y: auto;
     resize: none;
 }
-.e-virt-table-dropdown {
-    position: absolute;
-    top: -10000px;
-    left: -10000px;
-    text-align: left;
-    height: auto;
-    line-height: 0;
-    z-index: 100;
-    overflow: hidden;
-    background-color: var(--e-virt-table-editor-bg-color);
-    border: 2px solid var(--e-virt-table-color-primary);
-    box-sizing: border-box;
-    box-shadow: var(--e-virt-table-box-shadow);
-    display: flex;
-    align-items: center;
-}
-.e-virt-table-editor-search-textarea {
-    width: 100%;
-    box-sizing: border-box;
-    outline: none;
-    font-weight: 400;
-    padding: 8px;
-    font-size: 12px;
-    color: inherit;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    word-break: break-all;
-    line-height: 1.5;
-    margin: 0;
-    border: none;
-    vertical-align: middle;
-    background: var(--e-virt-table-color-white);
-    overflow-y: auto;
-    resize: none;
-}
-.e-virt-table-dropdown-datalist {
-    position: absolute;
-    top: -10000px;
-    left: -10000px;
-    text-align: left;
-    height: auto;
-    line-height: 0;
-    z-index: 100;
-    overflow: hidden;
-    background-color: var(--e-virt-table-editor-bg-color);
-    border: 2px solid var(--e-virt-table-color-primary);
-    box-sizing: border-box;
-    box-shadow: var(--e-virt-table-box-shadow);
-    display: flex;
-    align-items: center;
-}
 .e-virt-table-context-menu {
     /* display: none; */
     position: absolute;
